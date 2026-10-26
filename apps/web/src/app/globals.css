@@ -1,0 +1,403 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --canvas: #F8F7F4;
+  --card: #FFFFFF;
+  --border: #EAE5DE;
+  --primary: #2D221A;
+  --muted: #6E5D52;
+  --accent: #8C6A4F;
+  --accent-hover: #73543B;
+  --tag: #F0ECE7;
+  --shield: #1cb0f6;
+  --danger: #962d2d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  background-color: #F8F7F4;
+  color: #2D221A;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ===== MANDALA BACKGROUNDS ===== */
+.mandala-left {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  width: 1050px;
+  height: 1050px;
+  transform: translate(-50%, -50%);
+  opacity: 0.35;
+  animation: rotateLeft 60s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.mandala-right {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 1100px;
+  height: 1100px;
+  transform: translate(50%, -50%);
+  opacity: 0.25;
+  animation: rotateRight 90s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+@keyframes rotateLeft {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes rotateRight {
+  from {
+    transform: translate(50%, -50%) rotate(0deg) translateZ(0);
+  }
+
+  to {
+    transform: translate(50%, -50%) rotate(-360deg) translateZ(0);
+  }
+}
+
+/* ===== LANDING PAGE ===== */
+.hero-section {
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.hero-title {
+  font-size: 80px;
+  color: #2D221A;
+  margin: 0;
+  font-weight: bold;
+}
+
+.hero-subtitle {
+  font-size: 26px;
+  color: #6E5D52;
+  margin: 10px 0 80px 0;
+  text-align: center;
+}
+
+.nivaran-btn-hero {
+  padding: 20px 45px;
+  background: #8C6A4F;
+  color: white;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: background 0.3s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.nivaran-btn-hero:hover {
+  background: #73543B;
+}
+
+.about-wrapper {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 100px 0;
+  margin-top: 50px;
+  border-top: 1px solid #EAE5DE;
+  position: relative;
+  z-index: 10;
+}
+
+.about-container {
+  width: 90%;
+  max-width: 1200px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 60px;
+}
+
+@media (max-width: 768px) {
+  .about-container {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-title {
+    font-size: 52px;
+  }
+}
+
+.about-column h3 {
+  font-size: 22px;
+  color: #2D221A;
+  margin-bottom: 25px;
+  font-weight: bold;
+}
+
+.about-column p {
+  font-size: 15px;
+  line-height: 1.8;
+  color: #6E5D52;
+  margin: 0;
+}
+
+.team-footer {
+  width: 100%;
+  text-align: center;
+  margin-top: 80px;
+  padding-bottom: 20px;
+}
+
+.team-name {
+  font-size: 14px;
+  letter-spacing: 5px;
+  color: #8C6A4F;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+/* ===== AUTH & ONBOARDING GLASS CARD ===== */
+.auth-wrapper {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 40px;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(102, 53, 15, 0.15);
+}
+
+.glass-card-wide {
+  max-width: 680px;
+}
+
+.nivaran-input,
+.nivaran-select {
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  background: white;
+  color: #2A1503;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.nivaran-input:focus,
+.nivaran-select:focus {
+  border-color: #66350F;
+}
+
+.nivaran-btn {
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  border: none;
+  background: #66350F;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.nivaran-btn:hover {
+  background: #4a260a;
+}
+
+.nivaran-btn-outline {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  border: 1.5px solid #66350F;
+  background: transparent;
+  color: #66350F;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.nivaran-btn-outline:hover {
+  background: rgba(102, 53, 15, 0.08);
+}
+
+.nivaran-link {
+  font-size: 13px;
+  cursor: pointer;
+  color: #66350F;
+  margin-bottom: 10px;
+  display: block;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.nivaran-link:hover {
+  text-decoration: underline;
+}
+
+/* ===== SANCTUARY DASHBOARD SUBTLE ARTWORK ===== */
+.sanctuary-bg-art {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.sanctuary-bg-art .corner-flower-left {
+  position: absolute;
+  top: -120px;
+  left: -120px;
+  width: 480px;
+  height: 480px;
+  opacity: 0.18;
+}
+
+.sanctuary-bg-art .corner-flower-right {
+  position: absolute;
+  bottom: -140px;
+  right: -140px;
+  width: 520px;
+  height: 520px;
+  opacity: 0.16;
+}
+
+/* ===== UNIFIED MINIMAL THEME (SCOPED TO /explore) ===== */
+.explore-theme,
+[data-theme="explore"] {
+  --explore-canvas: #F8F7F4;
+  --explore-card: #FFFFFF;
+  --explore-border: #EAE5DE;
+  --explore-sage: #F0ECE7;
+  --explore-accent: #8C6A4F;
+  --explore-accent-hover: #73543B;
+  --explore-text: #2D221A;
+  --explore-muted: #6E5D52;
+  --explore-shadow: 0 4px 16px rgba(45, 34, 26, 0.04);
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Shimmer Button Effect */
+@keyframes shimmerSweep {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-20deg);
+  }
+}
+
+.shimmer-btn-ray {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 20%,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(255, 255, 255, 0.08) 80%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: shimmerSweep 3.5s ease-in-out infinite;
+}
+
+button:hover .shimmer-btn-ray {
+  animation: shimmerSweep 1.5s ease-in-out infinite;
+}
+
+/* ===== EXPLORE CORNER ROTATING MANDALA ===== */
+@keyframes spinSlow {
+  from {
+    transform: rotate(0deg) translateZ(0);
+  }
+  to {
+    transform: rotate(360deg) translateZ(0);
+  }
+}
+
+.explore-corner-mandala {
+  position: fixed;
+  bottom: -120px;
+  right: -120px;
+  width: 400px;
+  height: 400px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+  will-change: transform;
+  transform: translateZ(0);
+  animation: spinSlow 180s linear infinite;
+}
