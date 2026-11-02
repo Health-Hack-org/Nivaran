@@ -1,6 +1,9 @@
+from pathlib import Path
 from typing import List, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -21,7 +24,12 @@ class Settings(BaseSettings):
         return ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     model_config = SettingsConfigDict(
-        env_file=(".env", "../.env", "../../.env"),
+        env_file=(
+            str(_BASE_DIR / ".env"),
+            ".env",
+            "apps/api/.env",
+            "../.env",
+        ),
         env_file_encoding="utf-8",
         extra="ignore"
     )
