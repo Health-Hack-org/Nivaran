@@ -1,10 +1,22 @@
 import logging
+import uuid
+from typing import Optional
 from fastapi import APIRouter, HTTPException, status
 from app.schemas.prescription import UrgeLogRequest, UrgeLogResponse
 from app.core.database import get_supabase_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _is_valid_uuid(val: Optional[str]) -> bool:
+    if not val:
+        return False
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
 
 
 COPING_STRATEGIES = {
@@ -34,13 +46,15 @@ COPING_STRATEGIES = {
 @router.post("/log", response_model=UrgeLogResponse, status_code=status.HTTP_200_OK)
 async def log_urge(payload: UrgeLogRequest):
     """
-    Logs an emergency urge or craving surfing event.
-    Saves to Supabase urge_logs table if configured, and provides immediate
-    clinically validated somatic and psychological coping tactics.
+    Logs an emergency urge or craving surfing event:
+    1. Inserts the craving telemetry (user_id, track, intensity, trigger_type, surfed_successfully, notes) into Supabase urge_logs.
+    2. Delivers clinically validated immediate somatic and psychological coping tactics.
     """
     try:
         supabase = get_supabase_client()
-        if supabase and payload.user_id:
+        has_valid_user = _is_valid_uuid(payload.user_id)
+
+        if supabase and has_valid_user:
             try:
                 supabase.table("urge_logs").insert(
                     {
@@ -52,7 +66,10 @@ async def log_urge(payload: UrgeLogRequest):
                         "surfed_successfully": payload.surfed_successfully,
                     }
                 ).execute()
-                logger.info(f"Logged urge event for user {payload.user_id}, track={payload.track}, intensity={payload.intensity}")
+                logger.info(
+                    f"Successfully inserted urge log into Supabase for user {payload.user_id}, "
+                    f"track={payload.track}, intensity={payload.intensity}"
+                )
             except Exception as db_err:
                 logger.warning(f"Failed to record urge log to Supabase: {db_err}")
 
@@ -64,7 +81,9 @@ async def log_urge(payload: UrgeLogRequest):
         else:
             tier = "high"
 
-        coping_tip = COPING_STRATEGIES.get(payload.track, COPING_STRATEGIES["sm"]).get(tier, "Take slow deep breaths and practice urge surfing.")
+        coping_tip = COPING_STRATEGIES.get(payload.track, COPING_STRATEGIES["sm"]).get(
+            tier, "Take slow deep breaths and practice urge surfing."
+        )
 
         analysis = (
             f"Logged level {payload.intensity}/10 urge triggered by '{payload.trigger_type}'. "
