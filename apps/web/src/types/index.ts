@@ -30,6 +30,11 @@ export interface TrackProgress {
   current_day: number;
   streak: number;
   shields: number;
+  severity_score?: number;
+  severity_level?: 'minor' | 'moderate' | 'severe';
+  target_days?: number;
+  targetDays?: number;
+  survey_responses?: any[];
   updated_at?: string;
 }
 
@@ -88,6 +93,11 @@ export interface BiometricInput {
   activity_level?: ActivityLevel;
   track: TrackType;
   day_number?: number;
+  current_day?: number;
+  target_days?: number;
+  severity_score?: number;
+  severity_level?: 'minor' | 'moderate' | 'severe' | string;
+  survey_responses?: any[];
   medical_flags?: string[];
   medical_notes?: string;
   dietary_preference?: string;

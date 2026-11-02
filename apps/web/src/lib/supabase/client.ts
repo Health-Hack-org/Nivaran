@@ -1,6 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { UserProfile } from "@/types";
+import { UserProfile, TrackProgress } from "@/types";
 
 let clientInstance: SupabaseClient | null = null;
 
@@ -59,4 +59,23 @@ export function sanitizeProfileForDb(profile: Partial<UserProfile>) {
     avatar_url: profile.avatar_url || null,
     updated_at: new Date().toISOString(),
   };
+}
+
+/**
+ * Prepares track_progress rows for Supabase upsert
+ */
+export function sanitizeTrackProgressForDb(progress: Partial<TrackProgress>) {
+  const row: Record<string, any> = {
+    user_id: progress.user_id,
+    track: progress.track,
+    current_day: progress.current_day || 1,
+    streak: progress.streak || 0,
+    shields: progress.shields ?? 1,
+    updated_at: new Date().toISOString(),
+  };
+  if (progress.severity_score !== undefined) row.severity_score = progress.severity_score;
+  if (progress.severity_level !== undefined) row.severity_level = progress.severity_level;
+  if (progress.target_days !== undefined) row.target_days = progress.target_days;
+  if (progress.survey_responses !== undefined) row.survey_responses = progress.survey_responses;
+  return row;
 }
