@@ -26,7 +26,19 @@ import {
   UserPlus,
 } from "lucide-react";
 import { TrackType, Gender, ActivityLevel, UserProfile, TrackProgress, BiometricInput } from "@/types";
-import { getSupabaseBrowserClient, isSupabaseConfigured, sanitizeProfileForDb, isValidUuid } from "@/lib/supabase/client";
+import {
+  getSupabaseBrowserClient,
+  isSupabaseConfigured,
+  sanitizeProfileForDb,
+  sanitizeTrackProgressForDb,
+  isValidUuid,
+} from "@/lib/supabase/client";
+import {
+  TRACK_DIAGNOSTIC_SURVEYS,
+  SURVEY_OPTIONS,
+  calculateDiagnosticScore,
+  DiagnosticResult,
+} from "@/lib/constants/surveys";
 import { generatePrescription } from "@/lib/api";
 import Stepper, { Step } from "@/components/ui/Stepper";
 import SpecularButton from "@/components/ui/SpecularButton";
@@ -46,18 +58,16 @@ export default function ExplorePage() {
 
   // Onboarding Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalStep, setModalStep] = useState<1 | 2 | 3>(1); // 1: Track, 2: Auth, 3: Biometrics
+  const [modalStep, setModalStep] = useState<1 | 2 | 3 | 4>(1); // 1: Track, 2: Biometrics, 3: Survey, 4: Report Card
   const [selectedTrack, setSelectedTrack] = useState<TrackType>("sm");
 
-  // Auth sub-tab (for Step 2)
-  const [authTab, setAuthTab] = useState<"login" | "signup">("login");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authUsername, setAuthUsername] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  // Diagnostic Survey state (for Step 3 & Step 4)
+  const [surveyQuestionIndex, setSurveyQuestionIndex] = useState(0); // 0..9
+  const [surveyAnswers, setSurveyAnswers] = useState<Record<number, number>>({});
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
 
-  // Biometrics state (for Step 3)
+  // Biometrics state (for Step 2)
   const [bioUsername, setBioUsername] = useState("Seeker");
   const [bioAge, setBioAge] = useState(25);
   const [bioGender, setBioGender] = useState<Gender>("male");
@@ -67,10 +77,20 @@ export default function ExplorePage() {
   const [bioDiet, setBioDiet] = useState("vegetarian");
   const [bioMedicalFlags, setBioMedicalFlags] = useState<string[]>([]);
   const [isSubmittingBio, setIsSubmittingBio] = useState(false);
+  const [authError, setAuthError] = useState("");
 
   // Check if user is logged in & has existing profile
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
+
+  // Helper: profile fresh check (updated within past 30 days)
+  const isProfileFresh = (prof: UserProfile | null): boolean => {
+    if (!prof || !prof.height_cm) return false;
+    if (!prof.updated_at) return false;
+    const diffDays = (Date.now() - new Date(prof.updated_at).getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays <= 30;
+  };
 
   useEffect(() => {
     async function checkCurrentSession() {
@@ -90,6 +110,15 @@ export default function ExplorePage() {
 
           if (prof && prof.height_cm) {
             setHasExistingProfile(true);
+            setUserProfile(prof);
+            setBioUsername(prof.username || data.user.user_metadata?.username || "Seeker");
+            setBioAge(prof.age || 25);
+            setBioGender(prof.gender || "male");
+            setBioHeightCm(prof.height_cm || 175);
+            setBioWeightKg(prof.weight_kg || 70);
+            setBioActivityLevel(prof.activity_level || "light");
+            setBioDiet(prof.dietary_preference || "vegetarian");
+            setBioMedicalFlags(prof.medical_flags || []);
             localStorage.setItem("nivaran_profile", JSON.stringify(prof));
           }
           return;
@@ -111,6 +140,15 @@ export default function ExplorePage() {
           const parsed = JSON.parse(localProfile);
           if (parsed && parsed.height_cm) {
             setHasExistingProfile(true);
+            setUserProfile(parsed);
+            setBioUsername(parsed.username || "Seeker");
+            setBioAge(parsed.age || 25);
+            setBioGender(parsed.gender || "male");
+            setBioHeightCm(parsed.height_cm || 175);
+            setBioWeightKg(parsed.weight_kg || 70);
+            setBioActivityLevel(parsed.activity_level || "light");
+            setBioDiet(parsed.dietary_preference || "vegetarian");
+            setBioMedicalFlags(parsed.medical_flags || []);
           }
         } catch {
           // ignore
@@ -157,213 +195,33 @@ export default function ExplorePage() {
   // Open modal with track
   const handleOpenModal = (trackId?: TrackType) => {
     if (trackId) setSelectedTrack(trackId);
+    if (!currentUser) {
+      router.push(`/auth?tab=signup${trackId ? `&track=${trackId}` : ""}`);
+      return;
+    }
     setAuthError("");
+    setSurveyQuestionIndex(0);
+    setSurveyAnswers({});
+    setDiagnosticResult(null);
     setModalStep(1);
     setIsModalOpen(true);
   };
 
   // Step 1: Track Selected -> Proceed to Next Step
   const handleContinueFromTrack = () => {
-    if (currentUser) {
-      if (hasExistingProfile) {
-        // User is logged in and has completed profile -> Route immediately to dashboard with new track!
-        handleAssociateTrackAndRedirect(selectedTrack);
-      } else {
-        // Logged in new user -> Direct to Biometrics (Step 2)
-        setModalStep(2);
-      }
+    setAuthError("");
+    if (isProfileFresh(userProfile)) {
+      // Step 2 is auto-skipped if profile is fresh (<= 30 days) -> proceed to Step 3
+      setSurveyQuestionIndex(0);
+      setSurveyAnswers({});
+      setModalStep(3);
     } else {
-      // Need login / signup / guest -> Step 2
+      // Profile missing or > 30 days -> Show Biometrics (Step 2)
       setModalStep(2);
     }
   };
 
-  // Associate track for existing profile & go to dashboard
-  const handleAssociateTrackAndRedirect = async (track: TrackType) => {
-    setIsAuthLoading(true);
-    try {
-      const stored = localStorage.getItem("nivaran_profile");
-      let profile: UserProfile | null = stored ? JSON.parse(stored) : null;
-      const userId = currentUser?.id || profile?.id || "user-" + Date.now();
-
-      if (profile) {
-        profile.active_track = track;
-        const currentTracks = profile.selected_tracks || [];
-        if (!currentTracks.includes(track)) {
-          profile.selected_tracks = [...currentTracks, track];
-        }
-        profile.updated_at = new Date().toISOString();
-        localStorage.setItem("nivaran_profile", JSON.stringify(profile));
-      }
-
-      const initialProgress: TrackProgress = {
-        id: "tp-" + Date.now(),
-        user_id: userId,
-        track,
-        current_day: 1,
-        streak: 0,
-        shields: 1,
-      };
-      localStorage.setItem("nivaran_track_progress", JSON.stringify(initialProgress));
-
-      const supabase = getSupabaseBrowserClient();
-      if (supabase && isSupabaseConfigured() && currentUser?.id && isValidUuid(currentUser.id) && profile) {
-        try {
-          const dbProfile = sanitizeProfileForDb({
-            ...profile,
-            active_track: track,
-          });
-          await supabase.from("profiles").upsert(dbProfile);
-          await supabase.from("track_progress").upsert(
-            {
-              user_id: currentUser.id,
-              track,
-              current_day: 1,
-              streak: 0,
-              shields: 1,
-            },
-            { onConflict: "user_id,track" }
-          );
-        } catch (dbErr) {
-          console.warn("Supabase upsert warning:", dbErr);
-        }
-      }
-
-      // Generate initial prescription
-      if (profile) {
-        const payload: BiometricInput = {
-          user_id: userId,
-          username: profile.username,
-          age: profile.age,
-          gender: profile.gender,
-          height_cm: profile.height_cm,
-          weight_kg: profile.weight_kg,
-          activity_level: profile.activity_level,
-          track,
-          day_number: 1,
-          medical_flags: profile.medical_flags,
-          medical_notes: profile.medical_notes,
-          dietary_preference: profile.dietary_preference,
-        };
-        try {
-          const rx = await generatePrescription(payload);
-          localStorage.setItem("nivaran_prescription", JSON.stringify(rx));
-        } catch {
-          // fallback gracefully
-        }
-      }
-
-      setIsModalOpen(false);
-      router.push("/dashboard");
-    } catch (err: any) {
-      setAuthError(err.message || "Failed to initialize track.");
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  // Step 2 Auth: Sign in or Sign up
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsAuthLoading(true);
-    setAuthError("");
-
-    try {
-      const supabase = getSupabaseBrowserClient();
-
-      if (supabase && isSupabaseConfigured()) {
-        if (authTab === "login") {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: authEmail,
-            password: authPassword,
-          });
-          if (error) throw error;
-          if (data.user) {
-            setCurrentUser(data.user);
-            const { data: prof } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", data.user.id)
-              .single();
-
-            if (prof && prof.height_cm) {
-              setHasExistingProfile(true);
-              localStorage.setItem("nivaran_profile", JSON.stringify(prof));
-              await handleAssociateTrackAndRedirect(selectedTrack);
-              return;
-            }
-          }
-        } else {
-          // Sign Up
-          const { data, error } = await supabase.auth.signUp({
-            email: authEmail,
-            password: authPassword,
-            options: {
-              data: { username: authUsername || "Seeker" },
-            },
-          });
-          if (error) throw error;
-          if (data.user) {
-            setCurrentUser(data.user);
-            setBioUsername(authUsername || "Seeker");
-          }
-        }
-      } else {
-        // Local mode
-        const mockUser = {
-          id: "local-user-" + Date.now(),
-          email: authEmail || "seeker@nivaran.app",
-        };
-        localStorage.setItem("nivaran_auth_user", JSON.stringify(mockUser));
-        setCurrentUser(mockUser);
-
-        const existingProf = localStorage.getItem("nivaran_profile");
-        if (existingProf) {
-          const parsed = JSON.parse(existingProf);
-          if (parsed && parsed.height_cm) {
-            setHasExistingProfile(true);
-            await handleAssociateTrackAndRedirect(selectedTrack);
-            return;
-          }
-        }
-      }
-
-      // Proceed to Step 3: Biometrics
-      setModalStep(3);
-    } catch (err: any) {
-      setAuthError(err.message || "Authentication failed.");
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
-
-  // Guest Continue
-  const handleGuestContinue = async () => {
-    const guestUser = {
-      id: "guest-" + Date.now(),
-      email: "guest@nivaran.app",
-      isGuest: true,
-    };
-    localStorage.setItem("nivaran_auth_user", JSON.stringify(guestUser));
-    setCurrentUser(guestUser);
-
-    const existingProf = localStorage.getItem("nivaran_profile");
-    if (existingProf) {
-      try {
-        const parsed = JSON.parse(existingProf);
-        if (parsed?.height_cm) {
-          setHasExistingProfile(true);
-          await handleAssociateTrackAndRedirect(selectedTrack);
-          return;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    setModalStep(3);
-  };
-
-  // Step 3: Biometrics Submission
+  // Step 2: Biometrics Submission
   const handleBiometricsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingBio(true);
@@ -373,7 +231,6 @@ export default function ExplorePage() {
       const supabase = getSupabaseBrowserClient();
       let activeUser = currentUser;
 
-      // Ensure active session if available
       if (supabase && isSupabaseConfigured()) {
         try {
           const { data: userData } = await supabase.auth.getUser();
@@ -384,9 +241,10 @@ export default function ExplorePage() {
         } catch {}
       }
 
-      const userId = activeUser?.id || "user-" + Date.now();
+      const userId = activeUser?.id || userProfile?.id || "user-" + Date.now();
       const sanitizedUsername =
         (bioUsername || "").trim() ||
+        userProfile?.username ||
         activeUser?.user_metadata?.username ||
         activeUser?.email?.split("@")[0] ||
         "Seeker";
@@ -405,63 +263,162 @@ export default function ExplorePage() {
         medical_notes: "",
         dietary_preference: bioDiet,
         updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
+        created_at: userProfile?.created_at || new Date().toISOString(),
       };
 
-      const initialProgress: TrackProgress = {
+      if (supabase && isSupabaseConfigured() && activeUser?.id && isValidUuid(activeUser.id)) {
+        try {
+          const dbProfile = sanitizeProfileForDb(profileData);
+          await supabase.from("profiles").upsert(dbProfile);
+        } catch (dbErr) {
+          console.warn("Supabase profile upsert warning:", dbErr);
+        }
+      }
+
+      localStorage.setItem("nivaran_profile", JSON.stringify(profileData));
+      setUserProfile(profileData);
+      setHasExistingProfile(true);
+
+      // Successfully saved physical profile -> advance to Step 3: Diagnostic Survey!
+      setSurveyQuestionIndex(0);
+      setSurveyAnswers({});
+      setModalStep(3);
+    } catch (err: any) {
+      setAuthError(err.message || "Failed to save biometrics.");
+    } finally {
+      setIsSubmittingBio(false);
+    }
+  };
+
+  // Step 3: Diagnostic Survey Option Click
+  const handleSelectSurveyOption = (score: number) => {
+    const survey = TRACK_DIAGNOSTIC_SURVEYS[selectedTrack] || TRACK_DIAGNOSTIC_SURVEYS.sm;
+    const currentQuestion = survey.questions[surveyQuestionIndex];
+    if (!currentQuestion) return;
+
+    const nextAnswers = { ...surveyAnswers, [currentQuestion.id]: score };
+    setSurveyAnswers(nextAnswers);
+
+    if (surveyQuestionIndex < survey.questions.length - 1) {
+      setSurveyQuestionIndex((prev) => prev + 1);
+    } else {
+      // 10th question answered! Compute score & advance to Step 4: Diagnostic Report Card
+      const result = calculateDiagnosticScore(selectedTrack, nextAnswers);
+      setDiagnosticResult(result);
+      setModalStep(4);
+    }
+  };
+
+  // Step 4: Generate AI Recovery Plan & Enter Dashboard
+  const handleGenerateAIPlan = async () => {
+    if (!diagnosticResult) return;
+    setIsGeneratingPlan(true);
+    setAuthError("");
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      let activeUser = currentUser;
+
+      if (supabase && isSupabaseConfigured()) {
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user) activeUser = userData.user;
+        } catch {}
+      }
+
+      const userId = activeUser?.id || userProfile?.id || "user-" + Date.now();
+      const profile = userProfile || {
+        id: userId,
+        username: bioUsername || "Seeker",
+        age: bioAge,
+        gender: bioGender,
+        height_cm: bioHeightCm,
+        weight_kg: bioWeightKg,
+        activity_level: bioActivityLevel,
+        active_track: selectedTrack,
+        dietary_preference: bioDiet,
+        medical_flags: bioMedicalFlags,
+        medical_notes: "",
+      };
+
+      const progressData: TrackProgress = {
         id: "tp-" + Date.now(),
         user_id: userId,
         track: selectedTrack,
         current_day: 1,
         streak: 0,
         shields: 1,
+        severity_score: diagnosticResult.severityScore,
+        severity_level: diagnosticResult.severityLevel,
+        target_days: diagnosticResult.targetDays,
+        survey_responses: diagnosticResult.surveyResponses,
+        updated_at: new Date().toISOString(),
       };
 
-      // 1. Upsert profile in Supabase & 2. Insert default rows in track_progress
-      if (supabase && isSupabaseConfigured() && activeUser?.id) {
+      // 1. Upsert profile and track_progress into Supabase
+      if (supabase && isSupabaseConfigured() && activeUser?.id && isValidUuid(activeUser.id)) {
         try {
-          const dbProfile = sanitizeProfileForDb(profileData);
-          const { error: profErr } = await supabase.from("profiles").upsert(dbProfile);
-          if (profErr) console.warn("Supabase profile upsert warning:", profErr);
+          await supabase.from("profiles").upsert(
+            sanitizeProfileForDb({
+              ...profile,
+              active_track: selectedTrack,
+              updated_at: new Date().toISOString(),
+            })
+          );
 
-          // Insert default rows in track_progress for all 4 tracks with current_day: 1, streak: 0, shields: 1
-          const allTrackTypes: TrackType[] = ["sm", "sa", "gm", "jf"];
-          const trackRows = allTrackTypes.map((trk) => ({
+          const dbTrack = sanitizeTrackProgressForDb({
             user_id: activeUser.id,
-            track: trk,
+            track: selectedTrack,
             current_day: 1,
             streak: 0,
             shields: 1,
-          }));
-          const { error: trkErr } = await supabase.from("track_progress").upsert(trackRows, {
+            severity_score: diagnosticResult.severityScore,
+            severity_level: diagnosticResult.severityLevel,
+            target_days: diagnosticResult.targetDays,
+            survey_responses: diagnosticResult.surveyResponses,
+          });
+
+          await supabase.from("track_progress").upsert(dbTrack, {
             onConflict: "user_id,track",
           });
-          if (trkErr) console.warn("Supabase track_progress upsert warning:", trkErr);
         } catch (dbErr) {
           console.warn("Supabase upsert warning:", dbErr);
         }
       }
 
-      localStorage.setItem("nivaran_profile", JSON.stringify(profileData));
-      localStorage.setItem("nivaran_track_progress", JSON.stringify(initialProgress));
+      // 2. Persist in local storage
+      localStorage.setItem("nivaran_track_progress", JSON.stringify(progressData));
+      localStorage.setItem(
+        "nivaran_profile",
+        JSON.stringify({
+          ...profile,
+          active_track: selectedTrack,
+          updated_at: new Date().toISOString(),
+        })
+      );
 
-      // 3. Make POST request to /api/v1/prescriptions/generate with user profile payload
-      const payload: BiometricInput = {
+      // 3. Make POST request to FastAPI to generate Day 1 prescription with diagnostic baseline
+      const prescriptionPayload: BiometricInput = {
         user_id: userId,
-        username: sanitizedUsername,
-        age: bioAge,
-        gender: bioGender,
-        height_cm: bioHeightCm,
-        weight_kg: bioWeightKg,
-        activity_level: bioActivityLevel,
+        username: profile.username || "Seeker",
+        age: profile.age,
+        gender: profile.gender,
+        height_cm: profile.height_cm,
+        weight_kg: profile.weight_kg,
+        activity_level: profile.activity_level,
         track: selectedTrack,
         day_number: 1,
-        medical_flags: bioMedicalFlags,
-        dietary_preference: bioDiet,
+        medical_flags: profile.medical_flags || [],
+        medical_notes: profile.medical_notes || "",
+        dietary_preference: profile.dietary_preference || "vegetarian",
+        target_days: diagnosticResult.targetDays,
+        severity_score: diagnosticResult.severityScore,
+        severity_level: diagnosticResult.severityLevel,
+        survey_responses: diagnosticResult.surveyResponses,
       };
 
       try {
-        const rx = await generatePrescription(payload);
+        const rx = await generatePrescription(prescriptionPayload);
         localStorage.setItem("nivaran_prescription", JSON.stringify(rx));
       } catch (apiErr) {
         console.warn("Prescription fallback:", apiErr);
@@ -471,9 +428,9 @@ export default function ExplorePage() {
       setIsModalOpen(false);
       router.push("/dashboard");
     } catch (err: any) {
-      setAuthError(err.message || "Failed to save profile.");
+      setAuthError(err.message || "Failed to generate AI recovery plan.");
     } finally {
-      setIsSubmittingBio(false);
+      setIsGeneratingPlan(false);
     }
   };
 
@@ -919,18 +876,17 @@ export default function ExplorePage() {
               <Stepper
                 step={modalStep}
                 onStepChange={(newStep) => {
-                  if (currentUser) {
-                    if (newStep === 1) setModalStep(1);
-                    else if (newStep === 2 && selectedTrack) setModalStep(2);
-                  } else {
-                    if (newStep === 1) setModalStep(1);
-                    else if (newStep === 2 && selectedTrack) setModalStep(2);
-                    else if (newStep === 3) setModalStep(3);
+                  if (newStep < modalStep) {
+                    if (newStep === 2 && isProfileFresh(userProfile)) {
+                      setModalStep(1);
+                    } else {
+                      setModalStep(newStep as 1 | 2 | 3 | 4);
+                    }
                   }
                 }}
-                linear={true}
+                linear={false}
                 theme="light"
-                accentColor="#668575"
+                accentColor="#8C6A4F"
                 frame={false}
                 showFooter={false}
                 width="100%"
@@ -940,7 +896,7 @@ export default function ExplorePage() {
                 <Step title="Recovery Track" description="Choose focus">
                   <div className="py-2 space-y-4">
                     <p className="text-xs text-[#35291F]/80">
-                      Select the primary recovery track you wish to begin today. You can add more tracks later in your Sanctuary:
+                      Select the primary recovery track you wish to begin today. You will complete a 10-point clinical assessment to personalize your timeline:
                     </p>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -953,8 +909,8 @@ export default function ExplorePage() {
                             onClick={() => setSelectedTrack(t.id)}
                             className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-2 select-none ${
                               isSelected
-                                ? "border-[#668575] bg-[#E8EEE7]/40 shadow-xs"
-                                : "border-[#E8EEE7] bg-white hover:border-[#668575]/40"
+                                ? "border-[#8C6A4F] bg-[#8C6A4F]/10 shadow-xs"
+                                : "border-[#E8EEE7] bg-white hover:border-[#8C6A4F]/40"
                             }`}
                           >
                             <div className="flex items-center justify-between">
@@ -965,7 +921,7 @@ export default function ExplorePage() {
                                 <Icon className="w-4 h-4" />
                               </div>
                               {isSelected && (
-                                <CheckCircle2 className="w-4 h-4 text-[#668575]" />
+                                <CheckCircle2 className="w-4 h-4 text-[#8C6A4F]" />
                               )}
                             </div>
                             <div>
@@ -982,142 +938,20 @@ export default function ExplorePage() {
                     <div className="pt-4 border-t border-[#E8EEE7] flex items-center justify-end">
                       <button
                         onClick={handleContinueFromTrack}
-                        disabled={isAuthLoading}
-                        className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#668575] hover:bg-[#526c5f] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
+                        className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#8C6A4F] hover:bg-[#73543B] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
                       >
-                        <span>
-                          {hasExistingProfile
-                            ? "Activate Track & Enter Sanctuary"
-                            : currentUser
-                            ? "Continue to Biometrics"
-                            : "Continue to Authentication"}
-                        </span>
+                        <span>Continue to Clinical Assessment</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
                 </Step>
 
-                {/* STEP 2: AUTHENTICATION CHECK (Only shown if unauthenticated) */}
-                {!currentUser && (
-                  <Step title="Identity & Auth" description="Sign in or guest">
-                  <div className="py-2 space-y-4">
-                    {/* Tabs */}
-                    <div className="flex items-center border-b border-[#E8EEE7]">
-                      <button
-                        type="button"
-                        onClick={() => setAuthTab("login")}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors border-b-2 -mb-[1px] cursor-pointer ${
-                          authTab === "login"
-                            ? "border-[#668575] text-[#668575]"
-                            : "border-transparent text-[#35291F]/60 hover:text-[#35291F]"
-                        }`}
-                      >
-                        Sign In
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAuthTab("signup")}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors border-b-2 -mb-[1px] cursor-pointer ${
-                          authTab === "signup"
-                            ? "border-[#668575] text-[#668575]"
-                            : "border-transparent text-[#35291F]/60 hover:text-[#35291F]"
-                        }`}
-                      >
-                        Create Account
-                      </button>
-                    </div>
-
-                    <form onSubmit={handleAuthSubmit} className="space-y-3 pt-1">
-                      {authTab === "signup" && (
-                        <div>
-                          <label className="text-[11px] font-bold text-[#35291F] block mb-1">
-                            Your Seeker Name
-                          </label>
-                          <input
-                            type="text"
-                            value={authUsername}
-                            onChange={(e) => setAuthUsername(e.target.value)}
-                            placeholder="e.g. Maya"
-                            required
-                            className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none"
-                          />
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="text-[11px] font-bold text-[#35291F] block mb-1">
-                          Email Address
-                        </label>
-                        <input
-                          type="email"
-                          value={authEmail}
-                          onChange={(e) => setAuthEmail(e.target.value)}
-                          placeholder="seeker@gmail.com"
-                          required
-                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-bold text-[#35291F] block mb-1">
-                          Password
-                        </label>
-                        <input
-                          type="password"
-                          value={authPassword}
-                          onChange={(e) => setAuthPassword(e.target.value)}
-                          placeholder="••••••••"
-                          required
-                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between gap-3 pt-3 border-t border-[#E8EEE7]">
-                        <button
-                          type="button"
-                          onClick={() => setModalStep(1)}
-                          className="px-4 py-2.5 rounded-xl border border-[#E8EEE7] text-[#35291F] text-xs font-semibold hover:bg-[#E8EEE7]/40 transition-colors cursor-pointer"
-                        >
-                          ← Back to Track
-                        </button>
-
-                        <button
-                          type="submit"
-                          disabled={isAuthLoading}
-                          className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-[#668575] hover:bg-[#526c5f] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
-                        >
-                          {isAuthLoading ? (
-                            <span>Authenticating...</span>
-                          ) : (
-                            <>
-                              {authTab === "login" ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                              <span>{authTab === "login" ? "Sign In & Continue" : "Create Account & Continue"}</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </form>
-
-                    {/* Guest fallback option */}
-                    <div className="pt-2 text-center">
-                      <button
-                        type="button"
-                        onClick={handleGuestContinue}
-                        className="text-xs text-[#668575] hover:underline font-semibold cursor-pointer"
-                      >
-                        Or continue as Guest Seeker →
-                      </button>
-                    </div>
-                  </div>
-                </Step>
-                )}
-
-                {/* BIOMETRICS STEP (Step 2 if logged in, Step 3 if guest) */}
-                <Step title="Biometrics & Medical" description="Physical profile">
+                {/* STEP 2: 1-TIME BIOMETRICS CHECK (Auto-skipped if profile is fresh <= 30 days) */}
+                <Step title="Physical Profile" description="Biometrics check">
                   <form onSubmit={handleBiometricsSubmit} className="py-2 space-y-4">
                     <p className="text-xs text-[#35291F]/80">
-                      Used exclusively to calculate your deterministic BMR, TDEE, and safe Zone 2 heart rate:
+                      Used exclusively to calibrate your deterministic BMR, TDEE, and safe Zone 2 heart rate targets:
                     </p>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -1132,7 +966,7 @@ export default function ExplorePage() {
                           value={bioAge}
                           onChange={(e) => setBioAge(Number(e.target.value))}
                           required
-                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none"
+                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#8C6A4F] focus:ring-1 focus:ring-[#8C6A4F] outline-none"
                         />
                       </div>
 
@@ -1143,7 +977,7 @@ export default function ExplorePage() {
                         <select
                           value={bioGender}
                           onChange={(e) => setBioGender(e.target.value as Gender)}
-                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none bg-white"
+                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#8C6A4F] focus:ring-1 focus:ring-[#8C6A4F] outline-none bg-white"
                         >
                           <option value="male">Male</option>
                           <option value="female">Female</option>
@@ -1164,7 +998,7 @@ export default function ExplorePage() {
                           value={bioHeightCm}
                           onChange={(e) => setBioHeightCm(Number(e.target.value))}
                           required
-                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none"
+                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#8C6A4F] focus:ring-1 focus:ring-[#8C6A4F] outline-none"
                         />
                       </div>
 
@@ -1179,7 +1013,7 @@ export default function ExplorePage() {
                           value={bioWeightKg}
                           onChange={(e) => setBioWeightKg(Number(e.target.value))}
                           required
-                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none"
+                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#8C6A4F] focus:ring-1 focus:ring-[#8C6A4F] outline-none"
                         />
                       </div>
                     </div>
@@ -1192,7 +1026,7 @@ export default function ExplorePage() {
                         <select
                           value={bioActivityLevel}
                           onChange={(e) => setBioActivityLevel(e.target.value as ActivityLevel)}
-                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none bg-white"
+                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#8C6A4F] focus:ring-1 focus:ring-[#8C6A4F] outline-none bg-white"
                         >
                           <option value="sedentary">Sedentary (Desk work)</option>
                           <option value="light">Light (1-2 walks/wk)</option>
@@ -1208,7 +1042,7 @@ export default function ExplorePage() {
                         <select
                           value={bioDiet}
                           onChange={(e) => setBioDiet(e.target.value)}
-                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none bg-white"
+                          className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#8C6A4F] focus:ring-1 focus:ring-[#8C6A4F] outline-none bg-white"
                         >
                           <option value="vegetarian">Vegetarian</option>
                           <option value="vegan">Vegan</option>
@@ -1245,8 +1079,8 @@ export default function ExplorePage() {
                               }}
                               className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                                 isChecked
-                                  ? "bg-[#E8EEE7] border-[#668575] text-[#35291F] font-bold shadow-xs"
-                                  : "bg-white border-[#E8EEE7] text-[#35291F]/70 hover:border-[#668575]/50"
+                                  ? "bg-[#E8EEE7] border-[#8C6A4F] text-[#35291F] font-bold shadow-xs"
+                                  : "bg-white border-[#E8EEE7] text-[#35291F]/70 hover:border-[#8C6A4F]/50"
                               }`}
                             >
                               {isChecked ? "✓ " : "+ "}
@@ -1260,28 +1094,296 @@ export default function ExplorePage() {
                     <div className="pt-3 border-t border-[#E8EEE7] flex items-center justify-between gap-3">
                       <button
                         type="button"
-                        onClick={() => setModalStep(currentUser ? 1 : 2)}
+                        onClick={() => setModalStep(1)}
                         className="px-4 py-2.5 rounded-xl border border-[#E8EEE7] text-[#35291F] text-xs font-semibold hover:bg-[#E8EEE7]/40 transition-colors cursor-pointer"
                       >
-                        {currentUser ? "← Back to Track" : "← Back to Auth"}
+                        ← Back to Track
                       </button>
 
                       <button
                         type="submit"
                         disabled={isSubmittingBio}
-                        className="flex-1 sm:flex-initial py-2.5 px-6 rounded-xl bg-[#668575] hover:bg-[#526c5f] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
+                        className="flex-1 sm:flex-initial py-2.5 px-6 rounded-xl bg-[#8C6A4F] hover:bg-[#73543B] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
                       >
                         {isSubmittingBio ? (
-                          <span>Synthesizing Clinical Protocol...</span>
+                          <span>Saving Profile...</span>
                         ) : (
                           <>
-                            <Sparkles className="w-4 h-4 text-[#E8EEE7]" />
-                            <span>Enter NIVARAN Sanctuary</span>
+                            <span>Proceed to Clinical Assessment</span>
+                            <ArrowRight className="w-4 h-4" />
                           </>
                         )}
                       </button>
                     </div>
                   </form>
+                </Step>
+
+                {/* STEP 3: 10-QUESTION DIAGNOSTIC SURVEY */}
+                <Step
+                  title="Clinical Survey"
+                  description={`Question ${surveyQuestionIndex + 1} of 10`}
+                >
+                  {(() => {
+                    const activeSurvey =
+                      TRACK_DIAGNOSTIC_SURVEYS[selectedTrack] || TRACK_DIAGNOSTIC_SURVEYS.sm;
+                    const currentQ = activeSurvey.questions[surveyQuestionIndex];
+
+                    return (
+                      <div className="py-2 space-y-4">
+                        {/* Stepper Progress Bar */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-semibold text-[#6E5D52]">
+                            <span className="flex items-center gap-1.5">
+                              <span className="px-2 py-0.5 rounded-full bg-[#8C6A4F]/10 text-[#8C6A4F] text-[10px] uppercase font-bold tracking-wider">
+                                {currentQ?.dimension || "Assessment"}
+                              </span>
+                              <span>{activeSurvey.title}</span>
+                            </span>
+                            <span className="text-[#8C6A4F] font-bold">
+                              Question {surveyQuestionIndex + 1} of {activeSurvey.questions.length}
+                            </span>
+                          </div>
+                          <div className="w-full h-2 rounded-full bg-[#EAE5DE] overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-[#8C6A4F] transition-all duration-300"
+                              style={{
+                                width: `${
+                                  ((surveyQuestionIndex + 1) / activeSurvey.questions.length) * 100
+                                }%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Question Box */}
+                        <div className="p-4 rounded-2xl bg-[#F8F7F4] border border-[#EAE5DE] space-y-1">
+                          <span className="text-[10px] font-bold text-[#8C6A4F] uppercase tracking-wider block">
+                            Trigger Dimension: {currentQ?.triggerCategory}
+                          </span>
+                          <h4 className="text-sm sm:text-base font-bold text-[#2D221A] leading-snug">
+                            {currentQ?.question}
+                          </h4>
+                        </div>
+
+                        {/* 4 Standard Options */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {SURVEY_OPTIONS.map((opt) => {
+                            const isChosen = surveyAnswers[currentQ?.id] === opt.score;
+                            return (
+                              <button
+                                key={opt.score}
+                                type="button"
+                                onClick={() => handleSelectSurveyOption(opt.score)}
+                                className={`p-3.5 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 select-none active:scale-[0.99] ${
+                                  isChosen
+                                    ? "border-[#8C6A4F] bg-[#8C6A4F]/10 shadow-xs ring-1 ring-[#8C6A4F]"
+                                    : "border-[#EAE5DE] bg-white hover:border-[#8C6A4F]/50 hover:bg-[#FAF8F5]"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-xs text-[#2D221A]">
+                                    {opt.label}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                      isChosen
+                                        ? "bg-[#8C6A4F] text-white"
+                                        : "bg-[#F0ECE7] text-[#6E5D52]"
+                                    }`}
+                                  >
+                                    {opt.score} {opt.score === 1 ? "pt" : "pts"}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#6E5D52] leading-tight">
+                                  {opt.description}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Stepper Navigation */}
+                        <div className="pt-3 border-t border-[#EAE5DE] flex items-center justify-between gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (surveyQuestionIndex > 0) {
+                                setSurveyQuestionIndex((prev) => prev - 1);
+                              } else {
+                                if (isProfileFresh(userProfile)) {
+                                  setModalStep(1);
+                                } else {
+                                  setModalStep(2);
+                                }
+                              }
+                            }}
+                            className="px-4 py-2 rounded-xl border border-[#EAE5DE] text-[#2D221A] text-xs font-semibold hover:bg-[#F0ECE7]/50 transition-colors cursor-pointer"
+                          >
+                            {surveyQuestionIndex > 0 ? "← Previous Question" : "← Back"}
+                          </button>
+
+                          {surveyAnswers[currentQ?.id] !== undefined && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (surveyQuestionIndex < activeSurvey.questions.length - 1) {
+                                  setSurveyQuestionIndex((prev) => prev + 1);
+                                } else {
+                                  const res = calculateDiagnosticScore(
+                                    selectedTrack,
+                                    surveyAnswers
+                                  );
+                                  setDiagnosticResult(res);
+                                  setModalStep(4);
+                                }
+                              }}
+                              className="px-5 py-2 rounded-xl bg-[#8C6A4F] hover:bg-[#73543B] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                            >
+                              <span>
+                                {surveyQuestionIndex === activeSurvey.questions.length - 1
+                                  ? "View Diagnostic Report"
+                                  : "Next Question"}
+                              </span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </Step>
+
+                {/* STEP 4: DIAGNOSTIC REPORT CARD & PROTOCOL SYNTHESIS */}
+                <Step title="Diagnostic Report" description="Protocol synthesis">
+                  {diagnosticResult ? (
+                    <div className="py-2 space-y-4">
+                      {/* Report Hero Card */}
+                      <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#EAE5DE] space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[#EAE5DE] pb-3">
+                          <div>
+                            <span className="text-[10px] font-bold text-[#8C6A4F] uppercase tracking-wider block">
+                              Assessment Complete · {tracks.find((t) => t.id === selectedTrack)?.title}
+                            </span>
+                            <h4 className="text-base sm:text-lg font-bold text-[#2D221A]">
+                              Clinical Diagnostic Summary
+                            </h4>
+                          </div>
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                              diagnosticResult.severityLevel === "minor"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : diagnosticResult.severityLevel === "severe"
+                                ? "bg-rose-50 text-rose-800 border-rose-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            }`}
+                          >
+                            {diagnosticResult.classificationTitle}
+                          </span>
+                        </div>
+
+                        {/* Severity Gauge & Protocol Duration */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="p-4 rounded-xl bg-white border border-[#EAE5DE] flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-2xl bg-[#8C6A4F]/10 border border-[#8C6A4F]/20 flex flex-col items-center justify-center flex-shrink-0">
+                              <span className="text-lg font-black text-[#8C6A4F]">
+                                {diagnosticResult.severityScore}
+                              </span>
+                              <span className="text-[9px] font-semibold text-[#6E5D52]">/ 10.0</span>
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold text-[#2D221A] block">
+                                Normalized Severity
+                              </span>
+                              <p className="text-[11px] text-[#6E5D52] leading-tight mt-0.5">
+                                Calculated across 10 behavioral dimensions (Raw Score: {diagnosticResult.rawScore}/30)
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-4 rounded-xl bg-white border border-[#EAE5DE] flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-2xl bg-[#2D221A] text-white flex flex-col items-center justify-center flex-shrink-0">
+                              <span className="text-xl font-black text-[#F8F7F4]">
+                                {diagnosticResult.targetDays}
+                              </span>
+                              <span className="text-[9px] font-bold text-[#F8F7F4]/70">DAYS</span>
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold text-[#2D221A] block">
+                                {diagnosticResult.timelineName}
+                              </span>
+                              <p className="text-[11px] text-[#6E5D52] leading-tight mt-0.5">
+                                Scientifically calibrated duration to rewire neural craving loops and restore dopamine.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Top Vulnerability / Trigger Areas */}
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-bold text-[#2D221A] block uppercase tracking-wider">
+                            High-Friction Diagnostic Weak Spots ({diagnosticResult.topTriggers.length})
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {diagnosticResult.topTriggers.map((trig, idx) => (
+                              <div
+                                key={idx}
+                                className="p-3 rounded-xl bg-white border border-[#EAE5DE] text-left space-y-1"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-bold text-[#8C6A4F] uppercase">
+                                    {trig.dimension}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                    {trig.score}/3 pts
+                                  </span>
+                                </div>
+                                <p className="text-[11px] font-semibold text-[#2D221A] line-clamp-2">
+                                  {trig.triggerCategory}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* CTA Button */}
+                      <div className="pt-2 flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSurveyQuestionIndex(9);
+                            setModalStep(3);
+                          }}
+                          className="px-4 py-2.5 rounded-xl border border-[#EAE5DE] text-[#2D221A] text-xs font-semibold hover:bg-[#F0ECE7]/50 transition-colors cursor-pointer"
+                        >
+                          ← Review Survey
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleGenerateAIPlan}
+                          disabled={isGeneratingPlan}
+                          className="flex-1 sm:flex-initial py-3 px-6 rounded-xl bg-[#8C6A4F] hover:bg-[#73543B] text-white text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 active:scale-95"
+                        >
+                          {isGeneratingPlan ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              <span>Synthesizing {diagnosticResult.targetDays}-Day Clinical Plan...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4 text-amber-200" />
+                              <span>Generate My AI Recovery Plan →</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-xs text-[#6E5D52]">
+                      Please complete the 10-question assessment first.
+                    </div>
+                  )}
                 </Step>
               </Stepper>
             </div>

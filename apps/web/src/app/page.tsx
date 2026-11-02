@@ -43,7 +43,7 @@ export default function LandingPage() {
             href="/auth"
             className="flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-md"
             style={{
-              backgroundColor: "#66350F",
+              backgroundColor: "#8C6A4F",
               color: "#FFFFFF",
               borderRadius: "14px",
               padding: "16px 36px",

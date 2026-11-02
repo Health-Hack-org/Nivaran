@@ -208,7 +208,7 @@ function AuthForm() {
   };
 
   return (
-    <div className="auth-wrapper">
+    <div className="auth-wrapper" style={{ backgroundColor: "#F8F7F4", minHeight: "100vh" }}>
       {/* Signature Mandalas */}
       <BackgroundMandalas />
 
