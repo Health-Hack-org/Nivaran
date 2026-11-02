@@ -23,7 +23,12 @@ import {
   BiometricInput,
 } from "@/types";
 import { generatePrescription } from "@/lib/api";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  getSupabaseBrowserClient,
+  isSupabaseConfigured,
+  isValidUuid,
+  sanitizeProfileForDb,
+} from "@/lib/supabase/client";
 
 // Fallback prescription if backend is initializing
 const DEFAULT_PRESCRIPTION: PrescriptionResponse = {
@@ -108,6 +113,69 @@ const DEFAULT_PROFILE: UserProfile = {
   avatar_url: null,
 };
 
+interface TaskState {
+  specialMission: boolean;
+  routineTasks: Record<number, boolean>;
+  nutritionAdherence: boolean;
+  mindMovement: boolean;
+}
+
+/**
+ * Converts TaskState object to array of completed task identifier strings
+ * to persist in Supabase daily_logs.tasks_completed JSONB column.
+ */
+function getCompletedTaskIds(state: TaskState): string[] {
+  const ids: string[] = [];
+  if (state.specialMission) ids.push("special_mission");
+  Object.entries(state.routineTasks).forEach(([idx, done]) => {
+    if (done) ids.push(`routine_${idx}`);
+  });
+  if (state.nutritionAdherence) ids.push("nutrition");
+  if (state.mindMovement) ids.push("mind_movement");
+  return ids;
+}
+
+/**
+ * Restores checkbox states from daily_logs.tasks_completed (array or object).
+ */
+function restoreTaskStateFromCompletedIds(data: any): TaskState {
+  const result: TaskState = {
+    specialMission: false,
+    routineTasks: {},
+    nutritionAdherence: false,
+    mindMovement: false,
+  };
+  if (!data) return result;
+
+  if (Array.isArray(data)) {
+    data.forEach((id: string) => {
+      if (id === "special_mission") result.specialMission = true;
+      else if (id === "nutrition") result.nutritionAdherence = true;
+      else if (id === "mind_movement") result.mindMovement = true;
+      else if (typeof id === "string" && id.startsWith("routine_")) {
+        const idx = parseInt(id.replace("routine_", ""), 10);
+        if (!isNaN(idx)) result.routineTasks[idx] = true;
+      }
+    });
+    return result;
+  }
+
+  if (typeof data === "object") {
+    result.specialMission = Boolean(data.specialMission);
+    result.nutritionAdherence = Boolean(data.nutritionAdherence);
+    result.mindMovement = Boolean(data.mindMovement);
+    if (data.routineTasks && typeof data.routineTasks === "object") {
+      Object.entries(data.routineTasks).forEach(([k, v]) => {
+        const idx = parseInt(k, 10);
+        if (!isNaN(idx)) result.routineTasks[idx] = Boolean(v);
+      });
+    }
+    return result;
+  }
+
+  return result;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -127,12 +195,7 @@ export default function DashboardPage() {
   const [isLoadingPrescription, setIsLoadingPrescription] = useState<boolean>(false);
 
   // Daily Tasks Checklist State (Stored per track and day)
-  const [taskState, setTaskState] = useState<{
-    specialMission: boolean;
-    routineTasks: Record<number, boolean>;
-    nutritionAdherence: boolean;
-    mindMovement: boolean;
-  }>({
+  const [taskState, setTaskState] = useState<TaskState>({
     specialMission: false,
     routineTasks: {},
     nutritionAdherence: false,
@@ -146,82 +209,288 @@ export default function DashboardPage() {
   // Modals & Drawer State
   const [sidebarDrawerOpen, setSidebarDrawerOpen] = useState<boolean>(false);
   const [isSOSOpen, setIsSOSOpen] = useState<boolean>(false);
-  const [isBiometricsEditOpen, setIsBiometricsEditOpen] = useState<boolean>(false);
-  const [isRationaleOpen, setIsRationaleOpen] = useState<boolean>(false);
 
-  // 30-Day Health Check Notification State
-  const [dismissHealthCheck, setDismissHealthCheck] = useState<boolean>(false);
-  const isHealthCheckDue = useMemo(() => {
-    if (!profile) return false;
-    const lastUpdate = profile.updated_at || profile.created_at;
-    if (!lastUpdate) return false;
-    const daysSince = (Date.now() - new Date(lastUpdate).getTime()) / (1000 * 60 * 60 * 24);
-    return daysSince > 30;
-  }, [profile]);
+  // Current day calculation
+  const currentDayNumber = allTracksProgress[currentTrack]?.currentDay || 1;
+  const taskStorageKey = `nivaran_tasks_${currentTrack}_day_${currentDayNumber}`;
 
-  // Load from localStorage or Supabase on initial render
+  // ========================================================
+  // 1. INITIAL MOUNT: AUTH CHECK & FULL DATA FLOW PERSISTENCE
+  // ========================================================
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    let isMounted = true;
 
-    // Load Profile
-    const savedProfile = localStorage.getItem("nivaran_profile");
-    let loadedProfile = DEFAULT_PROFILE;
-    if (savedProfile) {
-      try {
-        loadedProfile = JSON.parse(savedProfile);
-        setProfile(loadedProfile);
-        if (loadedProfile.active_track) {
-          setCurrentTrack(loadedProfile.active_track);
-        }
-      } catch (e) {
-        console.error("Failed to parse profile:", e);
-      }
-    }
+    async function initializeDashboard() {
+      if (typeof window === "undefined") return;
 
-    // Load All Tracks Progress
-    const savedProgress = localStorage.getItem("nivaran_all_tracks_progress");
-    if (savedProgress) {
-      try {
-        setAllTracksProgress(JSON.parse(savedProgress));
-      } catch (e) {
-        console.error("Failed to parse tracks progress:", e);
-      }
-    } else {
-      const singleTrack = localStorage.getItem("nivaran_track_progress");
-      if (singleTrack) {
+      const supabase = getSupabaseBrowserClient();
+      let activeUserId: string | null = null;
+
+      // 1. Check for active session in Supabase Auth
+      if (supabase && isSupabaseConfigured()) {
         try {
-          const parsed = JSON.parse(singleTrack);
-          setAllTracksProgress((prev) => ({
-            ...prev,
-            [parsed.track || "sm"]: {
-              currentDay: parsed.current_day || 1,
-              streak: parsed.streak || 0,
-              shields: parsed.shields || 1,
-            },
-          }));
-        } catch (e) {}
-      }
-    }
-
-    // Load Prescription
-    const savedPrescription = localStorage.getItem("nivaran_prescription");
-    if (savedPrescription) {
-      try {
-        const parsed = JSON.parse(savedPrescription);
-        if (parsed.track === loadedProfile.active_track) {
-          setPrescription(parsed);
-        } else {
-          fetchTrackPrescription(loadedProfile.active_track || "sm", 1, loadedProfile);
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            activeUserId = session.user.id;
+          } else {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              activeUserId = user.id;
+            }
+          }
+        } catch (authErr) {
+          console.warn("Supabase auth session query error:", authErr);
         }
-      } catch (e) {
-        fetchTrackPrescription(loadedProfile.active_track || "sm", 1, loadedProfile);
       }
-    } else {
-      fetchTrackPrescription(loadedProfile.active_track || "sm", 1, loadedProfile);
-    }
-  }, []);
 
-  // Fetch prescription for a track and day
+      // If no Supabase user session, check local storage (guest user or local profile)
+      if (!activeUserId) {
+        const localUserStr = localStorage.getItem("nivaran_auth_user");
+        const localProfileStr = localStorage.getItem("nivaran_profile");
+        if (localUserStr) {
+          try {
+            const localUser = JSON.parse(localUserStr);
+            activeUserId = localUser.id || localUser.user_id;
+          } catch {}
+        }
+        if (!activeUserId && localProfileStr) {
+          try {
+            const localProf = JSON.parse(localProfileStr);
+            activeUserId = localProf.id;
+          } catch {}
+        }
+      }
+
+      // If still no user at all, initialize a default guest session so the dashboard ALWAYS opens!
+      if (!activeUserId) {
+        const guestUser = {
+          id: "guest-" + Date.now(),
+          email: "guest@nivaran.app",
+          isGuest: true,
+        };
+        activeUserId = guestUser.id;
+        localStorage.setItem("nivaran_auth_user", JSON.stringify(guestUser));
+      }
+
+      if (!isMounted) return;
+
+      // 2. Fetch Profile from Supabase (if valid UUID) or localStorage
+      let loadedProfile = DEFAULT_PROFILE;
+      if (supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
+        try {
+          const { data: profRow } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", activeUserId)
+            .maybeSingle();
+
+          if (profRow) {
+            loadedProfile = {
+              ...DEFAULT_PROFILE,
+              ...profRow,
+              selected_tracks: [profRow.active_track || "sm"],
+            };
+          }
+        } catch (e) {
+          console.warn("Error querying profile from Supabase:", e);
+        }
+      }
+
+      if (loadedProfile.id === DEFAULT_PROFILE.id) {
+        const savedProfile = localStorage.getItem("nivaran_profile");
+        if (savedProfile) {
+          try {
+            loadedProfile = JSON.parse(savedProfile);
+          } catch {}
+        }
+      }
+
+      if (activeUserId && loadedProfile.id === DEFAULT_PROFILE.id) {
+        loadedProfile.id = activeUserId;
+      }
+
+      if (isMounted) {
+        setProfile(loadedProfile);
+        localStorage.setItem("nivaran_profile", JSON.stringify(loadedProfile));
+      }
+
+      const activeTrack: TrackType = loadedProfile.active_track || "sm";
+      if (isMounted) {
+        setCurrentTrack(activeTrack);
+      }
+
+      // 3. Fetch current track progress from track_progress table
+      let progressMap = {
+        sm: { currentDay: 1, streak: 0, shields: 1 },
+        sa: { currentDay: 1, streak: 0, shields: 1 },
+        gm: { currentDay: 1, streak: 0, shields: 1 },
+        jf: { currentDay: 1, streak: 0, shields: 1 },
+      };
+
+      if (supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
+        try {
+          const { data: trkRows } = await supabase
+            .from("track_progress")
+            .select("track, current_day, streak, shields")
+            .eq("user_id", activeUserId);
+
+          if (trkRows && trkRows.length > 0) {
+            trkRows.forEach((row: any) => {
+              const t = row.track as TrackType;
+              if (t in progressMap) {
+                progressMap[t] = {
+                  currentDay: row.current_day || 1,
+                  streak: row.streak || 0,
+                  shields: row.shields ?? 1,
+                };
+              }
+            });
+          }
+        } catch (trkErr) {
+          console.warn("Error fetching track_progress from Supabase:", trkErr);
+        }
+      }
+
+      // Fallback to local storage if progress not found in Supabase
+      const savedProgress = localStorage.getItem("nivaran_all_tracks_progress");
+      if (savedProgress) {
+        try {
+          const parsed = JSON.parse(savedProgress);
+          progressMap = { ...progressMap, ...parsed };
+        } catch {}
+      }
+
+      if (isMounted) {
+        setAllTracksProgress(progressMap);
+        localStorage.setItem("nivaran_all_tracks_progress", JSON.stringify(progressMap));
+      }
+
+      const activeDayNumber = progressMap[activeTrack]?.currentDay || 1;
+
+      // 4. Fetch today's prescription from daily_prescriptions (or trigger generation if missing)
+      let activeRx: PrescriptionResponse | null = null;
+      if (supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
+        try {
+          const { data: rxRows } = await supabase
+            .from("daily_prescriptions")
+            .select("*")
+            .eq("user_id", activeUserId)
+            .eq("track", activeTrack)
+            .eq("day_number", activeDayNumber)
+            .limit(1);
+
+          if (rxRows && rxRows.length > 0) {
+            const row = rxRows[0];
+            activeRx = {
+              track: row.track,
+              day_number: row.day_number,
+              phase: row.phase,
+              phase_name:
+                row.phase === 1
+                  ? "Acute Withdrawal & Stabilization"
+                  : row.phase === 2
+                  ? "Dopamine Rewiring & Habit Substitution"
+                  : row.phase === 3
+                  ? "Stress Inoculation & Trigger Mastery"
+                  : "Neuroplastic Maintenance & Identity",
+              computed_metrics: {
+                bmi: 22.0,
+                bmi_category: "normal",
+                bmr: 1600,
+                tdee: 2200,
+                target_calories: row.diet_protocol?.calorie_target || 2050,
+                hydration_liters: row.diet_protocol?.hydration_liters || 2.5,
+                phase: row.phase,
+                phase_name: "Phase " + row.phase,
+              },
+              special_mission: row.special_mission,
+              routine_tasks: row.routine_tasks || [],
+              diet_protocol: row.diet_protocol,
+              exercise_protocol: row.exercise_protocol,
+              mental_protocol: row.mental_protocol,
+              why_this_works:
+                row.why_this_works ||
+                "Clinical behavioral activation protocol rewiring prefrontal dopamine circuits.",
+            };
+          }
+        } catch (rxErr) {
+          console.warn("Error querying daily_prescriptions from Supabase:", rxErr);
+        }
+      }
+
+      if (!activeRx) {
+        // Trigger generation via FastAPI backend
+        const genPayload: BiometricInput = {
+          user_id: activeUserId,
+          username: loadedProfile.username,
+          age: loadedProfile.age,
+          gender: loadedProfile.gender,
+          height_cm: loadedProfile.height_cm,
+          weight_kg: loadedProfile.weight_kg,
+          activity_level: loadedProfile.activity_level,
+          track: activeTrack,
+          day_number: activeDayNumber,
+          medical_flags: loadedProfile.medical_flags || [],
+          medical_notes: loadedProfile.medical_notes || "",
+          dietary_preference: loadedProfile.dietary_preference || "vegetarian",
+        };
+        try {
+          activeRx = await generatePrescription(genPayload);
+        } catch (genErr) {
+          console.warn("Generate prescription fallback:", genErr);
+          activeRx = {
+            ...DEFAULT_PRESCRIPTION,
+            track: activeTrack,
+            day_number: activeDayNumber,
+          };
+        }
+      }
+
+      if (isMounted && activeRx) {
+        setPrescription(activeRx);
+        localStorage.setItem("nivaran_prescription", JSON.stringify(activeRx));
+      }
+
+      // 5. Fetch today's completed task IDs from daily_logs to restore checkbox states
+      if (supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
+        try {
+          const { data: logRow } = await supabase
+            .from("daily_logs")
+            .select("*")
+            .eq("user_id", activeUserId)
+            .eq("track", activeTrack)
+            .eq("day_number", activeDayNumber)
+            .maybeSingle();
+
+          if (logRow && isMounted) {
+            const restoredState = restoreTaskStateFromCompletedIds(logRow.tasks_completed);
+            setTaskState(restoredState);
+            setIsDayCompleted(Boolean(logRow.completed_at));
+            localStorage.setItem(
+              `nivaran_tasks_${activeTrack}_day_${activeDayNumber}`,
+              JSON.stringify(restoredState)
+            );
+            if (logRow.completed_at) {
+              localStorage.setItem(
+                `nivaran_day_done_${activeTrack}_${activeDayNumber}`,
+                "true"
+              );
+            }
+          }
+        } catch (logErr) {
+          console.warn("Error querying daily_logs from Supabase:", logErr);
+        }
+      }
+    }
+
+    initializeDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  // Fetch prescription for a specific track and day
   const fetchTrackPrescription = async (
     track: TrackType,
     day: number,
@@ -241,7 +510,7 @@ export default function DashboardPage() {
       medical_flags: activeProf.medical_flags || [],
       medical_notes: activeProf.medical_notes || "",
       dietary_preference: activeProf.dietary_preference || "vegetarian",
-      recent_urge_triggers: [],
+      recent_urge_triggers: activeProf.recent_urge_triggers || [],
     };
 
     try {
@@ -260,10 +529,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Synchronize Task Completion State for active track & day
-  const currentDayNumber = allTracksProgress[currentTrack]?.currentDay || 1;
-  const taskStorageKey = `nivaran_tasks_${currentTrack}_day_${currentDayNumber}`;
-
+  // Synchronize Task Completion State from local storage on track/day change
   useEffect(() => {
     if (typeof window === "undefined") return;
     const savedTasks = localStorage.getItem(taskStorageKey);
@@ -292,16 +558,46 @@ export default function DashboardPage() {
     setIsDayCompleted(savedDayComplete === "true");
   }, [currentTrack, currentDayNumber, taskStorageKey]);
 
-  // Localized state updater for instant UI feedback without page lag
-  const updateTasks = useCallback((updater: (prev: typeof taskState) => typeof taskState) => {
-    setTaskState((prev) => {
-      const next = updater(prev);
-      if (typeof window !== "undefined") {
-        localStorage.setItem(taskStorageKey, JSON.stringify(next));
-      }
-      return next;
-    });
-  }, [taskStorageKey]);
+  // ========================================================
+  // 2. TASK COMPLETION: Toggling saves completed task array into daily_logs
+  // ========================================================
+  const updateTasks = useCallback(
+    (updater: (prev: TaskState) => TaskState) => {
+      setTaskState((prev) => {
+        const next = updater(prev);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(taskStorageKey, JSON.stringify(next));
+        }
+
+        // Persist completed task array into daily_logs in Supabase
+        const completedIds = getCompletedTaskIds(next);
+        const supabase = getSupabaseBrowserClient();
+        if (supabase && isSupabaseConfigured() && isValidUuid(profile.id)) {
+          (async () => {
+            try {
+              const { error } = await supabase
+                .from("daily_logs")
+                .upsert(
+                  {
+                    user_id: profile.id,
+                    track: currentTrack,
+                    day_number: currentDayNumber,
+                    tasks_completed: completedIds,
+                  },
+                  { onConflict: "user_id,track,day_number" }
+                );
+              if (error) console.warn("Supabase daily_logs task sync warning:", error);
+            } catch (err) {
+              console.warn("Supabase task sync error:", err);
+            }
+          })();
+        }
+
+        return next;
+      });
+    },
+    [taskStorageKey, profile.id, currentTrack, currentDayNumber]
+  );
 
   // Toggles
   const toggleSpecialMission = () => {
@@ -342,24 +638,58 @@ export default function DashboardPage() {
 
   const allTasksCompleted = completedTasks === totalTasks && totalTasks > 0;
 
-  // Alignment percentage for living mandala
-  const alignmentPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
   // Handle Track Switching
-  const handleSelectTrack = (track: TrackType) => {
+  const handleSelectTrack = async (track: TrackType) => {
     if (track === currentTrack) return;
     setCurrentTrack(track);
-    const day = allTracksProgress[track]?.currentDay || 1;
-    fetchTrackPrescription(track, day, profile);
 
+    const day = allTracksProgress[track]?.currentDay || 1;
     const updated = { ...profile, active_track: track };
     setProfile(updated);
+
     if (typeof window !== "undefined") {
       localStorage.setItem("nivaran_profile", JSON.stringify(updated));
     }
+
+    const supabase = getSupabaseBrowserClient();
+    if (supabase && isSupabaseConfigured() && isValidUuid(profile.id)) {
+      try {
+        const dbProfile = sanitizeProfileForDb(updated);
+        await supabase.from("profiles").upsert(dbProfile);
+
+        // Restore task states from daily_logs for newly selected track
+        const { data: logRow } = await supabase
+          .from("daily_logs")
+          .select("*")
+          .eq("user_id", profile.id)
+          .eq("track", track)
+          .eq("day_number", day)
+          .maybeSingle();
+
+        if (logRow) {
+          const restored = restoreTaskStateFromCompletedIds(logRow.tasks_completed);
+          setTaskState(restored);
+          setIsDayCompleted(Boolean(logRow.completed_at));
+        } else {
+          setTaskState({
+            specialMission: false,
+            routineTasks: {},
+            nutritionAdherence: false,
+            mindMovement: false,
+          });
+          setIsDayCompleted(false);
+        }
+      } catch (e) {
+        console.warn("Track switch sync error:", e);
+      }
+    }
+
+    fetchTrackPrescription(track, day, updated);
   };
 
-  // Complete Day Action - Subtle golden tactile pulse, NO CONFETTI
+  // ========================================================
+  // 3. COMPLETE DAY ACTION: Full Persistence Flow
+  // ========================================================
   const handleCompleteDay = async () => {
     if (!allTasksCompleted) return;
 
@@ -371,116 +701,105 @@ export default function DashboardPage() {
 
     const activeProgress = allTracksProgress[currentTrack] || { currentDay: 1, streak: 0, shields: 1 };
     const newStreak = activeProgress.streak + 1;
-    const newShields = newStreak % 3 === 0 ? activeProgress.shields + 1 : activeProgress.shields;
+    const newShields = newStreak % 3 === 0 ? (activeProgress.shields || 1) + 1 : (activeProgress.shields || 1);
+    const nextDay = activeProgress.currentDay + 1;
+    const nowIso = new Date().toISOString();
+
+    const completedIds = getCompletedTaskIds(taskState);
+
+    // 1. Record completed_at: NOW() in daily_logs
+    // 2. Increment streak by 1 in track_progress (grant +1 shield if streak % 3 == 0)
+    // 3. Set current_day = current_day + 1
+    const supabase = getSupabaseBrowserClient();
+    if (supabase && isSupabaseConfigured() && isValidUuid(profile.id)) {
+      try {
+        // Record completion in daily_logs
+        await supabase.from("daily_logs").upsert(
+          {
+            user_id: profile.id,
+            track: currentTrack,
+            day_number: currentDayNumber,
+            tasks_completed: completedIds,
+            completed_at: nowIso,
+          },
+          { onConflict: "user_id,track,day_number" }
+        );
+
+        // Update track_progress with incremented streak and next day
+        await supabase.from("track_progress").upsert(
+          {
+            user_id: profile.id,
+            track: currentTrack,
+            current_day: nextDay,
+            streak: newStreak,
+            shields: newShields,
+            updated_at: nowIso,
+          },
+          { onConflict: "user_id,track" }
+        );
+      } catch (e) {
+        console.warn("Supabase completion sync warning:", e);
+      }
+    }
+
+    // 4. Call FastAPI to generate Day current_day + 1 prescription, update local state, and refresh dashboard
+    setAdvancingDay(true);
+    const nextPayload: BiometricInput = {
+      user_id: profile.id,
+      username: profile.username,
+      age: profile.age,
+      gender: profile.gender,
+      height_cm: profile.height_cm,
+      weight_kg: profile.weight_kg,
+      activity_level: profile.activity_level,
+      track: currentTrack,
+      day_number: nextDay,
+      medical_flags: profile.medical_flags || [],
+      medical_notes: profile.medical_notes || "",
+      dietary_preference: profile.dietary_preference || "vegetarian",
+      recent_urge_triggers: profile.recent_urge_triggers || [],
+    };
+
+    let nextPrescription: PrescriptionResponse;
+    try {
+      nextPrescription = await generatePrescription(nextPayload);
+    } catch (genErr) {
+      console.warn("Generate next day prescription fallback:", genErr);
+      nextPrescription = {
+        ...prescription,
+        day_number: nextDay,
+      };
+    }
 
     const updatedTracksProgress = {
       ...allTracksProgress,
       [currentTrack]: {
-        ...activeProgress,
+        currentDay: nextDay,
         streak: newStreak,
         shields: newShields,
       },
     };
 
     setAllTracksProgress(updatedTracksProgress);
-    setIsDayCompleted(true);
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("nivaran_all_tracks_progress", JSON.stringify(updatedTracksProgress));
-      localStorage.setItem(`nivaran_day_done_${currentTrack}_${currentDayNumber}`, "true");
-    }
-
-    const supabase = getSupabaseBrowserClient();
-    if (supabase && isSupabaseConfigured() && profile.id) {
-      try {
-        await supabase.from("track_progress").upsert({
-          user_id: profile.id,
-          track: currentTrack,
-          current_day: currentDayNumber,
-          streak: newStreak,
-          shields: newShields,
-        });
-
-        await supabase.from("daily_logs").upsert({
-          user_id: profile.id,
-          track: currentTrack,
-          day_number: currentDayNumber,
-          tasks_completed: taskState,
-        });
-      } catch (e) {
-        console.warn("Supabase completion sync warning:", e);
-      }
-    }
-  };
-
-  // Proceed to Day X+1
-  const handleProceedNextDay = async () => {
-    setAdvancingDay(true);
-    const activeProgress = allTracksProgress[currentTrack] || { currentDay: 1, streak: 0, shields: 1 };
-    const nextDay = activeProgress.currentDay + 1;
-
-    const updatedTracksProgress = {
-      ...allTracksProgress,
-      [currentTrack]: {
-        ...activeProgress,
-        currentDay: nextDay,
-      },
-    };
-
-    setAllTracksProgress(updatedTracksProgress);
+    setPrescription(nextPrescription);
     setIsDayCompleted(false);
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("nivaran_all_tracks_progress", JSON.stringify(updatedTracksProgress));
-    }
-
-    setTaskState({
-      specialMission: false,
-      routineTasks: {},
-      nutritionAdherence: false,
-      mindMovement: false,
-    });
-
-    await fetchTrackPrescription(currentTrack, nextDay, profile);
     setAdvancingDay(false);
 
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
-
-  // Reset Progress
-  const handleResetProgress = () => {
-    const confirmReset = window.confirm(
-      `Are you sure you want to reset your progress for ${currentTrack.toUpperCase()}? Streak and day will return to Day 1.`
-    );
-    if (!confirmReset) return;
-
-    const updatedTracksProgress = {
-      ...allTracksProgress,
-      [currentTrack]: {
-        currentDay: 1,
-        streak: 0,
-        shields: 1,
-      },
-    };
-
-    setAllTracksProgress(updatedTracksProgress);
-    setIsDayCompleted(false);
-    setTaskState({
+    // Reset daily tasks checklist for the fresh day
+    const resetTasks: TaskState = {
       specialMission: false,
       routineTasks: {},
       nutritionAdherence: false,
       mindMovement: false,
-    });
+    };
+    setTaskState(resetTasks);
 
     if (typeof window !== "undefined") {
       localStorage.setItem("nivaran_all_tracks_progress", JSON.stringify(updatedTracksProgress));
-      localStorage.removeItem(`nivaran_day_done_${currentTrack}_${currentDayNumber}`);
-      localStorage.removeItem(taskStorageKey);
+      localStorage.setItem("nivaran_prescription", JSON.stringify(nextPrescription));
+      localStorage.setItem(`nivaran_tasks_${currentTrack}_day_${nextDay}`, JSON.stringify(resetTasks));
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
-
-    fetchTrackPrescription(currentTrack, 1, profile);
   };
 
   // Sign out - completely purge session state and return to clean landing page
@@ -502,7 +821,6 @@ export default function DashboardPage() {
           localStorage.removeItem(key);
         }
       });
-      // Force clean reload back to landing page so no stale memory remains
       window.location.href = "/";
       return;
     }
@@ -666,36 +984,24 @@ export default function DashboardPage() {
 
             {/* Action button: [Complete Day] */}
             <div className="pt-2">
-              {!isDayCompleted ? (
-                <button
-                  onClick={handleCompleteDay}
-                  className="w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#8C6A4F] hover:bg-[#73543B] transition-all cursor-pointer shadow-xs active:scale-98 flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Complete Day</span>
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-bold text-center flex items-center justify-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                    <span>Day {currentDayNumber} Completed! Streak Fortified 🔥</span>
-                  </div>
-                  <button
-                    onClick={handleProceedNextDay}
-                    disabled={advancingDay}
-                    className="w-full py-3 px-4 rounded-xl bg-[#8C6A4F] hover:bg-[#73543B] text-white font-bold text-xs sm:text-sm shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98"
-                  >
-                    {advancingDay ? (
-                      <span>Loading Next Day...</span>
-                    ) : (
-                      <>
-                        <span>Proceed to Day {currentDayNumber + 1}</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={handleCompleteDay}
+                disabled={!allTasksCompleted || advancingDay}
+                className={`w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm text-white transition-all shadow-xs flex items-center justify-center gap-2 ${
+                  allTasksCompleted && !advancingDay
+                    ? "bg-[#8C6A4F] hover:bg-[#73543B] cursor-pointer active:scale-98"
+                    : "bg-[#8C6A4F]/50 cursor-not-allowed opacity-80"
+                }`}
+              >
+                {advancingDay ? (
+                  <span>Synthesizing Next Day Protocol...</span>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Complete Day {currentDayNumber}</span>
+                  </>
+                )}
+              </button>
             </div>
           </section>
 
@@ -709,7 +1015,7 @@ export default function DashboardPage() {
                 </h3>
                 <div className="flex items-center gap-1.5 text-xs font-bold">
                   <span className="bg-[#F0ECE7] text-[#2D221A] px-2.5 py-0.5 rounded-lg">
-                    {prescription.diet_protocol?.calorie_target || 2200} kcal
+                    {prescription.diet_protocol?.calorie_target || 2050} kcal
                   </span>
                   <span className="bg-[#F0ECE7] text-[#2D221A] px-2.5 py-0.5 rounded-lg">
                     {prescription.diet_protocol?.hydration_liters || 2.5}L Water
@@ -744,7 +1050,7 @@ export default function DashboardPage() {
                     {prescription.exercise_protocol?.duration_mins || 30} mins
                   </span>
                   <span className="bg-[#F0ECE7] text-[#2D221A] px-2.5 py-0.5 rounded-lg">
-                    Low Impact
+                    {prescription.exercise_protocol?.intensity?.replace("_", " ") || "Low Impact"}
                   </span>
                 </div>
               </div>

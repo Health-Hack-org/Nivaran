@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { UserProfile, TrackType, PrescriptionResponse, BiometricInput } from "@/types";
 import { generatePrescription } from "@/lib/api";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient, isSupabaseConfigured, sanitizeProfileForDb, isValidUuid } from "@/lib/supabase/client";
 
 interface SidebarProps {
   profile: UserProfile;
@@ -122,8 +122,13 @@ export function Sidebar({
       }
 
       const supabase = getSupabaseBrowserClient();
-      if (supabase && isSupabaseConfigured()) {
-        await supabase.from("profiles").upsert(updatedProfile);
+      if (supabase && isSupabaseConfigured() && isValidUuid(updatedProfile.id)) {
+        try {
+          const dbProfile = sanitizeProfileForDb(updatedProfile);
+          await supabase.from("profiles").upsert(dbProfile);
+        } catch (dbErr) {
+          console.warn("Failed to update profile in Supabase:", dbErr);
+        }
       }
 
       // Re-generate prescription with new biometrics

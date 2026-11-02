@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { TrackType, UrgeLogRequest, UrgeLogResponse } from "@/types";
 import { logUrgeEvent } from "@/lib/api";
+import { getSupabaseBrowserClient, isSupabaseConfigured, isValidUuid } from "@/lib/supabase/client";
 
 interface UrgeSOSModalProps {
   isOpen: boolean;
@@ -127,7 +128,23 @@ export function UrgeSOSModal({
         onUrgeLogged(selectedTrigger, res.coping_tip);
       }
     } catch (err) {
-      // Local fallback if API fails
+      // Local or direct Supabase client fallback if API is unreachable
+      const supabase = getSupabaseBrowserClient();
+      if (supabase && isSupabaseConfigured() && isValidUuid(userId)) {
+        try {
+          await supabase.from("urge_logs").insert({
+            user_id: userId,
+            track: currentTrack,
+            intensity,
+            trigger_type: selectedTrigger,
+            notes: notes || "",
+            surfed_successfully: surfedSuccessfully,
+          });
+        } catch (dbErr) {
+          console.warn("Direct client urge log fallback insert:", dbErr);
+        }
+      }
+
       const fallbackRes: UrgeLogResponse = {
         success: true,
         message: "Urge wave safely recorded and overcome.",

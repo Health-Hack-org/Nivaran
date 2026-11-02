@@ -342,6 +342,7 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -352,6 +353,7 @@ body {
   0% {
     transform: translateX(-150%) skewX(-20deg);
   }
+
   100% {
     transform: translateX(200%) skewX(-20deg);
   }
@@ -362,14 +364,12 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.08) 20%,
-    rgba(255, 255, 255, 0.35) 50%,
-    rgba(255, 255, 255, 0.08) 80%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.08) 20%,
+      rgba(255, 255, 255, 0.35) 50%,
+      rgba(255, 255, 255, 0.08) 80%,
+      transparent 100%);
   pointer-events: none;
   animation: shimmerSweep 3.5s ease-in-out infinite;
 }
@@ -383,6 +383,7 @@ button:hover .shimmer-btn-ray {
   from {
     transform: rotate(0deg) translateZ(0);
   }
+
   to {
     transform: rotate(360deg) translateZ(0);
   }
