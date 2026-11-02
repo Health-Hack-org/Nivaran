@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { BackgroundMandalas } from "@/components/mandala/BackgroundMandalas";
 import { generatePrescription } from "@/lib/api";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient, isSupabaseConfigured, sanitizeProfileForDb, isValidUuid } from "@/lib/supabase/client";
 import {
   TrackType,
   Gender,
@@ -160,15 +160,26 @@ export default function OnboardingPage() {
       const sanitizedUsername = username.trim() || "Seeker";
 
       let userId: string = "local-user-" + Date.now();
-      if (typeof window !== "undefined") {
+      const supabase = getSupabaseBrowserClient();
+      let activeUser = null;
+
+      if (supabase && isSupabaseConfigured()) {
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user) {
+            activeUser = userData.user;
+            userId = userData.user.id;
+          }
+        } catch {}
+      }
+
+      if (!activeUser && typeof window !== "undefined") {
         const authUser = localStorage.getItem("nivaran_auth_user");
         if (authUser) {
           try {
             const parsed = JSON.parse(authUser);
             if (parsed.id) userId = parsed.id;
-          } catch {
-            // ignore
-          }
+          } catch {}
         }
       }
 
@@ -197,11 +208,21 @@ export default function OnboardingPage() {
         shields: 1,
       };
 
-      const supabase = getSupabaseBrowserClient();
-      if (supabase && isSupabaseConfigured()) {
+      // 1. Upsert profile & 2. Insert default rows in track_progress
+      if (supabase && isSupabaseConfigured() && activeUser?.id && isValidUuid(activeUser.id)) {
         try {
-          await supabase.from("profiles").upsert(profileData);
-          await supabase.from("track_progress").upsert(initialProgress, {
+          const dbProfile = sanitizeProfileForDb(profileData);
+          await supabase.from("profiles").upsert(dbProfile);
+
+          const allTrackTypes: TrackType[] = ["sm", "sa", "gm", "jf"];
+          const trackRows = allTrackTypes.map((trk) => ({
+            user_id: activeUser.id,
+            track: trk,
+            current_day: 1,
+            streak: 0,
+            shields: 1,
+          }));
+          await supabase.from("track_progress").upsert(trackRows, {
             onConflict: "user_id,track",
           });
         } catch (dbErr) {

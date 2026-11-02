@@ -26,7 +26,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { TrackType, Gender, ActivityLevel, UserProfile, TrackProgress, BiometricInput } from "@/types";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient, isSupabaseConfigured, sanitizeProfileForDb, isValidUuid } from "@/lib/supabase/client";
 import { generatePrescription } from "@/lib/api";
 import Stepper, { Step } from "@/components/ui/Stepper";
 import SpecularButton from "@/components/ui/SpecularButton";
@@ -162,18 +162,18 @@ export default function ExplorePage() {
     setIsModalOpen(true);
   };
 
-  // Step 1: Track Selected -> Proceed to Auth Check
+  // Step 1: Track Selected -> Proceed to Next Step
   const handleContinueFromTrack = () => {
     if (currentUser) {
       if (hasExistingProfile) {
         // User is logged in and has completed profile -> Route immediately to dashboard with new track!
         handleAssociateTrackAndRedirect(selectedTrack);
       } else {
-        // Logged in but needs biometrics
-        setModalStep(3);
+        // Logged in new user -> Direct to Biometrics (Step 2)
+        setModalStep(2);
       }
     } else {
-      // Need login / signup
+      // Need login / signup / guest -> Step 2
       setModalStep(2);
     }
   };
@@ -207,9 +207,26 @@ export default function ExplorePage() {
       localStorage.setItem("nivaran_track_progress", JSON.stringify(initialProgress));
 
       const supabase = getSupabaseBrowserClient();
-      if (supabase && isSupabaseConfigured() && profile) {
-        await supabase.from("profiles").upsert(profile);
-        await supabase.from("track_progress").upsert(initialProgress, { onConflict: "user_id,track" });
+      if (supabase && isSupabaseConfigured() && currentUser?.id && isValidUuid(currentUser.id) && profile) {
+        try {
+          const dbProfile = sanitizeProfileForDb({
+            ...profile,
+            active_track: track,
+          });
+          await supabase.from("profiles").upsert(dbProfile);
+          await supabase.from("track_progress").upsert(
+            {
+              user_id: currentUser.id,
+              track,
+              current_day: 1,
+              streak: 0,
+              shields: 1,
+            },
+            { onConflict: "user_id,track" }
+          );
+        } catch (dbErr) {
+          console.warn("Supabase upsert warning:", dbErr);
+        }
       }
 
       // Generate initial prescription
@@ -353,10 +370,30 @@ export default function ExplorePage() {
     setAuthError("");
 
     try {
-      const userId = currentUser?.id || "user-" + Date.now();
+      const supabase = getSupabaseBrowserClient();
+      let activeUser = currentUser;
+
+      // Ensure active session if available
+      if (supabase && isSupabaseConfigured()) {
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user) {
+            activeUser = userData.user;
+            setCurrentUser(userData.user);
+          }
+        } catch {}
+      }
+
+      const userId = activeUser?.id || "user-" + Date.now();
+      const sanitizedUsername =
+        (bioUsername || "").trim() ||
+        activeUser?.user_metadata?.username ||
+        activeUser?.email?.split("@")[0] ||
+        "Seeker";
+
       const profileData: UserProfile = {
         id: userId,
-        username: bioUsername || "Seeker",
+        username: sanitizedUsername,
         gender: bioGender,
         age: Number(bioAge),
         height_cm: Number(bioHeightCm),
@@ -380,13 +417,26 @@ export default function ExplorePage() {
         shields: 1,
       };
 
-      const supabase = getSupabaseBrowserClient();
-      if (supabase && isSupabaseConfigured()) {
+      // 1. Upsert profile in Supabase & 2. Insert default rows in track_progress
+      if (supabase && isSupabaseConfigured() && activeUser?.id) {
         try {
-          await supabase.from("profiles").upsert(profileData);
-          await supabase.from("track_progress").upsert(initialProgress, {
+          const dbProfile = sanitizeProfileForDb(profileData);
+          const { error: profErr } = await supabase.from("profiles").upsert(dbProfile);
+          if (profErr) console.warn("Supabase profile upsert warning:", profErr);
+
+          // Insert default rows in track_progress for all 4 tracks with current_day: 1, streak: 0, shields: 1
+          const allTrackTypes: TrackType[] = ["sm", "sa", "gm", "jf"];
+          const trackRows = allTrackTypes.map((trk) => ({
+            user_id: activeUser.id,
+            track: trk,
+            current_day: 1,
+            streak: 0,
+            shields: 1,
+          }));
+          const { error: trkErr } = await supabase.from("track_progress").upsert(trackRows, {
             onConflict: "user_id,track",
           });
+          if (trkErr) console.warn("Supabase track_progress upsert warning:", trkErr);
         } catch (dbErr) {
           console.warn("Supabase upsert warning:", dbErr);
         }
@@ -395,9 +445,10 @@ export default function ExplorePage() {
       localStorage.setItem("nivaran_profile", JSON.stringify(profileData));
       localStorage.setItem("nivaran_track_progress", JSON.stringify(initialProgress));
 
+      // 3. Make POST request to /api/v1/prescriptions/generate with user profile payload
       const payload: BiometricInput = {
         user_id: userId,
-        username: bioUsername,
+        username: sanitizedUsername,
         age: bioAge,
         gender: bioGender,
         height_cm: bioHeightCm,
@@ -416,6 +467,7 @@ export default function ExplorePage() {
         console.warn("Prescription fallback:", apiErr);
       }
 
+      // 4. Route to dashboard
       setIsModalOpen(false);
       router.push("/dashboard");
     } catch (err: any) {
@@ -581,7 +633,7 @@ export default function ExplorePage() {
               className="h-10 px-5 text-sm font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
             >
               <Sparkles className="w-4 h-4 text-white shrink-0" />
-              <span>Get Started</span>
+              <span>Get Started with Your Recovery</span>
             </SpecularButton>
           </div>
         </div>
@@ -706,7 +758,7 @@ export default function ExplorePage() {
                       onClick={() => handleOpenModal(t.id)}
                       className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer shadow-xs bg-[#8C6A4F] hover:bg-[#73543B] active:scale-95 flex items-center justify-center gap-1.5"
                     >
-                      <span>Select Track</span>
+                      <span>Select Your Track</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -802,7 +854,7 @@ export default function ExplorePage() {
               className="px-8 py-3.5 text-base font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
             >
               <Sparkles className="w-4 h-4 text-white shrink-0" />
-              <span>Choose Your Recovery Plan</span>
+              <span>Get Started with Your Recovery</span>
             </SpecularButton>
           </div>
         </section>
@@ -867,12 +919,13 @@ export default function ExplorePage() {
               <Stepper
                 step={modalStep}
                 onStepChange={(newStep) => {
-                  if (newStep < modalStep) {
-                    setModalStep(newStep as 1 | 2 | 3);
-                  } else if (newStep === 2 && selectedTrack) {
-                    setModalStep(2);
-                  } else if (newStep === 3 && currentUser) {
-                    setModalStep(3);
+                  if (currentUser) {
+                    if (newStep === 1) setModalStep(1);
+                    else if (newStep === 2 && selectedTrack) setModalStep(2);
+                  } else {
+                    if (newStep === 1) setModalStep(1);
+                    else if (newStep === 2 && selectedTrack) setModalStep(2);
+                    else if (newStep === 3) setModalStep(3);
                   }
                 }}
                 linear={true}
@@ -932,15 +985,22 @@ export default function ExplorePage() {
                         disabled={isAuthLoading}
                         className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#668575] hover:bg-[#526c5f] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
                       >
-                        <span>{hasExistingProfile ? "Activate Track & Enter Sanctuary" : "Continue to Authentication"}</span>
+                        <span>
+                          {hasExistingProfile
+                            ? "Activate Track & Enter Sanctuary"
+                            : currentUser
+                            ? "Continue to Biometrics"
+                            : "Continue to Authentication"}
+                        </span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
                 </Step>
 
-                {/* STEP 2: AUTHENTICATION CHECK */}
-                <Step title="Identity & Auth" description="Sign in or guest">
+                {/* STEP 2: AUTHENTICATION CHECK (Only shown if unauthenticated) */}
+                {!currentUser && (
+                  <Step title="Identity & Auth" description="Sign in or guest">
                   <div className="py-2 space-y-4">
                     {/* Tabs */}
                     <div className="flex items-center border-b border-[#E8EEE7]">
@@ -993,7 +1053,7 @@ export default function ExplorePage() {
                           type="email"
                           value={authEmail}
                           onChange={(e) => setAuthEmail(e.target.value)}
-                          placeholder="seeker@nivaran.app"
+                          placeholder="seeker@gmail.com"
                           required
                           className="w-full p-2.5 rounded-xl border border-[#E8EEE7] text-xs text-[#35291F] focus:border-[#668575] focus:ring-1 focus:ring-[#668575] outline-none"
                         />
@@ -1051,8 +1111,9 @@ export default function ExplorePage() {
                     </div>
                   </div>
                 </Step>
+                )}
 
-                {/* STEP 3: SMART BIOMETRIC PROFILING */}
+                {/* BIOMETRICS STEP (Step 2 if logged in, Step 3 if guest) */}
                 <Step title="Biometrics & Medical" description="Physical profile">
                   <form onSubmit={handleBiometricsSubmit} className="py-2 space-y-4">
                     <p className="text-xs text-[#35291F]/80">
@@ -1199,10 +1260,10 @@ export default function ExplorePage() {
                     <div className="pt-3 border-t border-[#E8EEE7] flex items-center justify-between gap-3">
                       <button
                         type="button"
-                        onClick={() => setModalStep(2)}
+                        onClick={() => setModalStep(currentUser ? 1 : 2)}
                         className="px-4 py-2.5 rounded-xl border border-[#E8EEE7] text-[#35291F] text-xs font-semibold hover:bg-[#E8EEE7]/40 transition-colors cursor-pointer"
                       >
-                        ← Back to Auth
+                        {currentUser ? "← Back to Track" : "← Back to Auth"}
                       </button>
 
                       <button

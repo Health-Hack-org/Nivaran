@@ -37,13 +37,46 @@ export default function LandingPage() {
         <h1 className="hero-title">NIVARAN</h1>
         <p className="hero-subtitle">A free mind-growth & addiction recovery app</p>
 
-        <Link
-          href="/explore"
-          className="nivaran-btn-hero"
-        >
-          <span>Enter NIVARAN</span>
-          <ArrowRight style={{ width: "18px", height: "18px" }} />
-        </Link>
+        {/* Action Buttons: Balanced Primary & Secondary CTAs */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
+          <Link
+            href="/auth"
+            className="flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-md"
+            style={{
+              backgroundColor: "#66350F",
+              color: "#FFFFFF",
+              borderRadius: "14px",
+              padding: "16px 36px",
+              fontWeight: 700,
+              fontSize: "16px",
+              minWidth: "190px",
+              textDecoration: "none",
+            }}
+          >
+            <span>Enter NIVARAN</span>
+            <ArrowRight style={{ width: "18px", height: "18px" }} />
+          </Link>
+
+          <Link
+            href="/explore"
+            className="flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
+            style={{
+              backgroundColor: "rgba(255, 253, 249, 0.8)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              color: "#2D221A",
+              border: "1.5px solid #2D221A",
+              borderRadius: "14px",
+              padding: "16px 36px",
+              fontWeight: 700,
+              fontSize: "16px",
+              minWidth: "190px",
+              textDecoration: "none",
+            }}
+          >
+            <span>About Us</span>
+          </Link>
+        </div>
       </section>
 
       {/* About Section */}
