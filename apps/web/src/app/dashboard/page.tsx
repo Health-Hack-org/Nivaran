@@ -10,6 +10,7 @@ import {
   Sparkles,
   ArrowRight,
   ExternalLink,
+  HeartPulse,
 } from "lucide-react";
 
 import { SpringCheck } from "@/components/ui/SpringCheck";
@@ -28,6 +29,7 @@ import {
   isSupabaseConfigured,
   isValidUuid,
   sanitizeProfileForDb,
+  sanitizeTrackProgressForDb,
 } from "@/lib/supabase/client";
 
 // Fallback prescription if backend is initializing
@@ -176,6 +178,16 @@ function restoreTaskStateFromCompletedIds(data: any): TaskState {
   return result;
 }
 
+interface DashboardTrackProgress {
+  currentDay: number;
+  streak: number;
+  shields: number;
+  targetDays?: number;
+  severityScore?: number;
+  severityLevel?: "minor" | "moderate" | "severe";
+  surveyResponses?: any[];
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -183,12 +195,12 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [currentTrack, setCurrentTrack] = useState<TrackType>("sm");
   const [allTracksProgress, setAllTracksProgress] = useState<
-    Record<TrackType, { currentDay: number; streak: number; shields: number }>
+    Record<TrackType, DashboardTrackProgress>
   >({
-    sm: { currentDay: 1, streak: 0, shields: 1 },
-    sa: { currentDay: 1, streak: 0, shields: 1 },
-    gm: { currentDay: 1, streak: 0, shields: 1 },
-    jf: { currentDay: 1, streak: 0, shields: 1 },
+    sm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+    sa: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+    gm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+    jf: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
   });
 
   const [prescription, setPrescription] = useState<PrescriptionResponse>(DEFAULT_PRESCRIPTION);
@@ -210,8 +222,24 @@ export default function DashboardPage() {
   const [sidebarDrawerOpen, setSidebarDrawerOpen] = useState<boolean>(false);
   const [isSOSOpen, setIsSOSOpen] = useState<boolean>(false);
 
-  // Current day calculation
-  const currentDayNumber = allTracksProgress[currentTrack]?.currentDay || 1;
+  // Active track progress & target days calculation
+  const activeTrackProgress = allTracksProgress[currentTrack] || {
+    currentDay: 1,
+    streak: 0,
+    shields: 1,
+    targetDays: 28,
+  };
+  const currentDayNumber = activeTrackProgress.currentDay || 1;
+  const targetDays = activeTrackProgress.targetDays || 28;
+  const progressPercent = Math.min(100, Math.round((currentDayNumber / targetDays) * 100));
+
+  // Check if profile was updated more than 30 days ago (or has no timestamp)
+  const isProfileStale = useMemo(() => {
+    if (!profile || !profile.updated_at) return false;
+    const diffDays = (Date.now() - new Date(profile.updated_at).getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays > 30;
+  }, [profile]);
+
   const taskStorageKey = `nivaran_tasks_${currentTrack}_day_${currentDayNumber}`;
 
   // ========================================================
@@ -320,18 +348,18 @@ export default function DashboardPage() {
       }
 
       // 3. Fetch current track progress from track_progress table
-      let progressMap = {
-        sm: { currentDay: 1, streak: 0, shields: 1 },
-        sa: { currentDay: 1, streak: 0, shields: 1 },
-        gm: { currentDay: 1, streak: 0, shields: 1 },
-        jf: { currentDay: 1, streak: 0, shields: 1 },
+      let progressMap: Record<TrackType, DashboardTrackProgress> = {
+        sm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+        sa: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+        gm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+        jf: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
       };
 
       if (supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
         try {
           const { data: trkRows } = await supabase
             .from("track_progress")
-            .select("track, current_day, streak, shields")
+            .select("track, current_day, streak, shields, target_days, severity_score, severity_level, survey_responses")
             .eq("user_id", activeUserId);
 
           if (trkRows && trkRows.length > 0) {
@@ -342,6 +370,13 @@ export default function DashboardPage() {
                   currentDay: row.current_day || 1,
                   streak: row.streak || 0,
                   shields: row.shields ?? 1,
+                  targetDays: row.target_days || 28,
+                  severityScore:
+                    row.severity_score !== null && row.severity_score !== undefined
+                      ? Number(row.severity_score)
+                      : undefined,
+                  severityLevel: row.severity_level || undefined,
+                  surveyResponses: row.survey_responses || undefined,
                 };
               }
             });
@@ -357,6 +392,31 @@ export default function DashboardPage() {
         try {
           const parsed = JSON.parse(savedProgress);
           progressMap = { ...progressMap, ...parsed };
+        } catch {}
+      }
+
+      // Also merge single active track progress if stored in nivaran_track_progress
+      const savedSingleProgress = localStorage.getItem("nivaran_track_progress");
+      if (savedSingleProgress) {
+        try {
+          const parsed = JSON.parse(savedSingleProgress);
+          const t = parsed.track as TrackType;
+          if (t && t in progressMap) {
+            progressMap[t] = {
+              ...progressMap[t],
+              currentDay: parsed.current_day || progressMap[t].currentDay,
+              streak: parsed.streak ?? progressMap[t].streak,
+              shields: parsed.shields ?? progressMap[t].shields,
+              targetDays:
+                parsed.target_days || parsed.targetDays || progressMap[t].targetDays || 28,
+              severityScore:
+                parsed.severity_score !== undefined
+                  ? Number(parsed.severity_score)
+                  : progressMap[t].severityScore,
+              severityLevel: parsed.severity_level || progressMap[t].severityLevel,
+              surveyResponses: parsed.survey_responses || progressMap[t].surveyResponses,
+            };
+          }
         } catch {}
       }
 
@@ -433,6 +493,10 @@ export default function DashboardPage() {
           medical_flags: loadedProfile.medical_flags || [],
           medical_notes: loadedProfile.medical_notes || "",
           dietary_preference: loadedProfile.dietary_preference || "vegetarian",
+          target_days: progressMap[activeTrack]?.targetDays || 28,
+          severity_score: progressMap[activeTrack]?.severityScore,
+          severity_level: progressMap[activeTrack]?.severityLevel,
+          survey_responses: progressMap[activeTrack]?.surveyResponses,
         };
         try {
           activeRx = await generatePrescription(genPayload);
@@ -511,6 +575,10 @@ export default function DashboardPage() {
       medical_notes: activeProf.medical_notes || "",
       dietary_preference: activeProf.dietary_preference || "vegetarian",
       recent_urge_triggers: activeProf.recent_urge_triggers || [],
+      target_days: allTracksProgress[track]?.targetDays || 28,
+      severity_score: allTracksProgress[track]?.severityScore,
+      severity_level: allTracksProgress[track]?.severityLevel,
+      survey_responses: allTracksProgress[track]?.surveyResponses,
     };
 
     try {
@@ -727,14 +795,18 @@ export default function DashboardPage() {
 
         // Update track_progress with incremented streak and next day
         await supabase.from("track_progress").upsert(
-          {
+          sanitizeTrackProgressForDb({
             user_id: profile.id,
             track: currentTrack,
             current_day: nextDay,
             streak: newStreak,
             shields: newShields,
+            target_days: activeProgress.targetDays || 28,
+            severity_score: activeProgress.severityScore,
+            severity_level: activeProgress.severityLevel,
+            survey_responses: activeProgress.surveyResponses,
             updated_at: nowIso,
-          },
+          }),
           { onConflict: "user_id,track" }
         );
       } catch (e) {
@@ -758,6 +830,10 @@ export default function DashboardPage() {
       medical_notes: profile.medical_notes || "",
       dietary_preference: profile.dietary_preference || "vegetarian",
       recent_urge_triggers: profile.recent_urge_triggers || [],
+      target_days: activeProgress.targetDays || 28,
+      severity_score: activeProgress.severityScore,
+      severity_level: activeProgress.severityLevel,
+      survey_responses: activeProgress.surveyResponses,
     };
 
     let nextPrescription: PrescriptionResponse;
@@ -774,6 +850,7 @@ export default function DashboardPage() {
     const updatedTracksProgress = {
       ...allTracksProgress,
       [currentTrack]: {
+        ...activeProgress,
         currentDay: nextDay,
         streak: newStreak,
         shields: newShields,
@@ -898,6 +975,31 @@ export default function DashboardPage() {
           </button>
         </header>
 
+        {/* Soft 30-Day Biometric Calibration Prompt */}
+        {isProfileStale && (
+          <div className="bg-[#FAF8F5] border border-[#8C6A4F]/30 rounded-2xl p-4 flex items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#8C6A4F]/10 text-[#8C6A4F] flex items-center justify-center flex-shrink-0">
+                <HeartPulse className="w-5 h-5 text-[#8C6A4F]" />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-[#2D221A]">
+                  30-Day Biometrics Calibration Due
+                </h4>
+                <p className="text-xs text-[#6E5D52]">
+                  Your metabolic baseline has not been updated in over 30 days. Re-calibrate your height, weight, and diet in the Menu to keep nutrition and Zone 2 heart rate targets accurate.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setSidebarDrawerOpen(true)}
+              className="px-3.5 py-1.5 text-xs font-bold text-[#8C6A4F] hover:bg-[#8C6A4F]/10 border border-[#8C6A4F]/30 rounded-xl transition-colors whitespace-nowrap cursor-pointer flex-shrink-0"
+            >
+              Update Biometrics →
+            </button>
+          </div>
+        )}
+
         {/* ======================================================== */}
         {/* B. MAIN CANVAS: 3 SIMPLE FOCUSED BLOCKS                  */}
         {/* ======================================================== */}
@@ -906,9 +1008,26 @@ export default function DashboardPage() {
           <section className="bg-white rounded-2xl p-6 border border-[#EAE5DE] shadow-xs space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <span className="text-2xl sm:text-3xl font-black text-[#2D221A]">
-                  Day {currentDayNumber} <span className="text-[#6E5D52] font-semibold text-lg sm:text-xl">/ 28</span>
-                </span>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="text-2xl sm:text-3xl font-black text-[#2D221A]">
+                    Day {currentDayNumber} <span className="text-[#6E5D52] font-semibold text-lg sm:text-xl">/ {targetDays}</span>
+                  </span>
+                  {activeTrackProgress.severityScore && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                        activeTrackProgress.severityLevel === "minor"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : activeTrackProgress.severityLevel === "severe"
+                          ? "bg-rose-50 text-rose-800 border-rose-200"
+                          : "bg-amber-50 text-amber-800 border-amber-200"
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                      <span className="capitalize">{activeTrackProgress.severityLevel || "Moderate"} Dependency</span>
+                      <span className="opacity-75">· {activeTrackProgress.severityScore.toFixed(1)}/10</span>
+                    </span>
+                  )}
+                </div>
                 <span className="text-xs text-[#6E5D52] font-medium block mt-0.5">
                   Phase {prescription.phase || 1} · {prescription.phase_name || "Acute Stabilization"}
                 </span>
@@ -917,7 +1036,7 @@ export default function DashboardPage() {
               {/* Streak Counter */}
               <div className="bg-[#F0ECE7] text-[#8C6A4F] border border-[#EAE5DE] px-3.5 py-1.5 rounded-xl font-bold text-sm sm:text-base flex items-center gap-1.5">
                 <Flame className="w-4 h-4 fill-[#8C6A4F] text-[#8C6A4F]" />
-                <span>{allTracksProgress[currentTrack]?.streak || 0} Days Streak</span>
+                <span>{activeTrackProgress.streak || 0} Days Streak</span>
               </div>
             </div>
 
@@ -925,12 +1044,12 @@ export default function DashboardPage() {
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between text-xs text-[#6E5D52] font-semibold">
                 <span>Milestone Progress</span>
-                <span>{Math.min(100, Math.round((currentDayNumber / 28) * 100))}%</span>
+                <span>{progressPercent}%</span>
               </div>
               <div className="w-full h-2.5 rounded-full bg-[#F0ECE7] overflow-hidden">
                 <div
                   className="h-full rounded-full bg-[#8C6A4F] transition-all duration-300"
-                  style={{ width: `${Math.min(100, Math.round((currentDayNumber / 28) * 100))}%` }}
+                  style={{ width: `${progressPercent}%` }}
                 />
               </div>
             </div>

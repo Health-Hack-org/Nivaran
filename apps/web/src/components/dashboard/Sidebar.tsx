@@ -11,6 +11,7 @@ import {
   X,
   Check,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { UserProfile, TrackType, PrescriptionResponse, BiometricInput } from "@/types";
 import { generatePrescription } from "@/lib/api";
@@ -20,7 +21,17 @@ interface SidebarProps {
   profile: UserProfile;
   currentTrack: TrackType;
   onSelectTrack: (track: TrackType) => void;
-  allTracksProgress: Record<TrackType, { currentDay: number; streak: number; shields?: number }>;
+  allTracksProgress: Record<
+    TrackType,
+    {
+      currentDay: number;
+      streak: number;
+      shields?: number;
+      targetDays?: number;
+      severityScore?: number;
+      severityLevel?: string;
+    }
+  >;
   prescription?: PrescriptionResponse;
   onOpenEditBiometrics?: () => void;
   onResetProgress?: () => void;
@@ -85,8 +96,15 @@ export function Sidebar({
   }, [profile]);
 
   const activeProgramMeta = trackInfo[currentTrack] || trackInfo.sm;
-  const activeProg = allTracksProgress[currentTrack] || { currentDay: 1, streak: 0, shields: 1 };
-  const percentComplete = Math.min(100, Math.round((activeProg.currentDay / 28) * 100));
+  const activeProg = allTracksProgress[currentTrack] || { currentDay: 1, streak: 0, shields: 1, targetDays: 28 };
+  const targetDays = activeProg.targetDays || 28;
+  const percentComplete = Math.min(100, Math.round((activeProg.currentDay / targetDays) * 100));
+
+  const isProfileStale = useMemo(() => {
+    if (!profile || !profile.updated_at) return false;
+    const diffDays = (Date.now() - new Date(profile.updated_at).getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays > 30;
+  }, [profile]);
 
   const availableFlags = [
     { id: "asthma", label: "Asthma" },
@@ -228,6 +246,26 @@ export function Sidebar({
                 </div>
               </div>
 
+              {/* 30-Day Check-in Soft Prompt Banner */}
+              {isProfileStale && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-amber-900 text-xs space-y-1.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
+                    <span>30-Day Biometrics Due</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-tight">
+                    Your physical baseline has not been updated in over 30 days. Update below to keep your Zone 2 heart rate and nutrition targets calibrated.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="text-[11px] font-bold text-[#8C6A4F] hover:underline cursor-pointer block pt-0.5"
+                  >
+                    Update Baseline Now →
+                  </button>
+                </div>
+              )}
+
               {/* Active Recovery Track */}
               <div className="bg-white rounded-2xl p-4 border border-[#EAE5DE] shadow-xs space-y-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C6A4F] block">
@@ -245,7 +283,7 @@ export function Sidebar({
               <div className="bg-white rounded-2xl p-4 border border-[#EAE5DE] shadow-xs space-y-2.5">
                 <div className="flex items-center justify-between text-xs font-bold text-[#2D221A]">
                   <span>Track Progress</span>
-                  <span className="text-[#8C6A4F]">Day {activeProg.currentDay} / 28</span>
+                  <span className="text-[#8C6A4F]">Day {activeProg.currentDay} / {targetDays}</span>
                 </div>
                 
                 {/* Progress bar */}
