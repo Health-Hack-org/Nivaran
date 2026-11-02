@@ -16,10 +16,21 @@ class BiometricInput(BaseModel):
     activity_level: ActivityLevel = "light"
     track: TrackType
     day_number: int = Field(default=1, ge=1, description="Recovery day number")
+    current_day: Optional[int] = Field(default=None, description="Alias for day_number")
+    target_days: int = Field(default=28, ge=7, le=180, description="Dynamic recovery duration (21, 35, 54 days)")
+    severity_score: float = Field(default=5.0, ge=1.0, le=10.0, description="Diagnostic severity score 1.0 to 10.0")
+    severity_level: Literal["minor", "moderate", "severe"] = Field(default="moderate", description="minor, moderate, or severe")
+    survey_responses: List[dict] = Field(default_factory=list, description="List of question text and score/answer dicts")
     medical_flags: List[str] = Field(default_factory=list, description="Medical condition flags")
     medical_notes: str = Field(default="", description="Additional medical or lifestyle notes")
     dietary_preference: str = Field(default="vegetarian", description="vegetarian, non_vegetarian, vegan, eggetarian")
     recent_urge_triggers: List[str] = Field(default_factory=list, description="Recent urge triggers logged by user")
+
+    def get_effective_day(self) -> int:
+        return self.current_day if self.current_day is not None else self.day_number
+
+
+PrescriptionRequest = BiometricInput
 
 
 class ComputedMetrics(BaseModel):

@@ -39,6 +39,7 @@ async def generate_prescription(biometrics: BiometricInput):
     try:
         supabase = get_supabase_client()
         has_valid_user = _is_valid_uuid(biometrics.user_id)
+        effective_day = biometrics.get_effective_day()
 
         # 1. Check cache in Supabase daily_prescriptions
         if supabase and has_valid_user:
@@ -48,7 +49,7 @@ async def generate_prescription(biometrics: BiometricInput):
                     .select("*")
                     .eq("user_id", biometrics.user_id)
                     .eq("track", biometrics.track)
-                    .eq("day_number", biometrics.day_number)
+                    .eq("day_number", effective_day)
                     .limit(1)
                     .execute()
                 )
@@ -56,7 +57,7 @@ async def generate_prescription(biometrics: BiometricInput):
                     row = cached.data[0]
                     logger.info(
                         f"Cache hit: returning cached prescription for user {biometrics.user_id}, "
-                        f"track {biometrics.track}, day {biometrics.day_number}"
+                        f"track {biometrics.track}, day {effective_day}"
                     )
                     metrics = compute_all_metrics(biometrics)
                     return PrescriptionResponse(

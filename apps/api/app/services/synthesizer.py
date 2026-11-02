@@ -242,7 +242,8 @@ def _build_deterministic_missions(
     metrics: ComputedMetrics
 ) -> tuple[str, List[str], str]:
     """Generates track-specific and phase-specific daily missions, tasks, and scientific rationale."""
-    day = biometrics.day_number
+    day = biometrics.get_effective_day()
+    target_days = getattr(biometrics, "target_days", 28) or 28
     phase = metrics.phase
     track = biometrics.track
 
@@ -322,12 +323,47 @@ def generate_daily_prescription(biometrics: BiometricInput) -> PrescriptionRespo
     Main clinical synthesizer pipeline:
     1. Computes deterministic biometrics (BMR, TDEE, calories, hydration, phase).
     2. Runs medical guardrails.
-    3. Merges any urge triggers from urge_logs.
-    4. Calls Google Gemini (gemini-2.5-flash / gemini-1.5-flash / gemini-2.0-flash) for personalized synthesis.
-    5. Safely falls back to deterministic rule-based output on any failure or timeout (NEVER throws 500).
+    3. Merges urge triggers and 10-question diagnostic assessment answers.
+    4. Calibrates intensity based on diagnostic severity_level (minor/moderate/severe) & target_days (21/35/54).
+    5. Calls Google Gemini (gemini-2.5-flash / gemini-1.5-flash / gemini-2.0-flash) for personalized synthesis.
+    6. Safely falls back to deterministic rule-based output on any failure or timeout (NEVER throws 500).
     """
     metrics = compute_all_metrics(biometrics)
     guardrails = evaluate_clinical_guardrails(biometrics, metrics)
+    effective_day = biometrics.get_effective_day()
+
+    # Diagnostic survey attributes
+    severity_level = getattr(biometrics, "severity_level", "moderate") or "moderate"
+    severity_score = getattr(biometrics, "severity_score", 5.0) or 5.0
+    target_days = getattr(biometrics, "target_days", 28) or 28
+    survey_responses = getattr(biometrics, "survey_responses", []) or []
+
+    # Parse high-impact weak spots (scores 2 or 3)
+    high_triggers = []
+    if survey_responses and isinstance(survey_responses, list):
+        for resp in survey_responses:
+            if isinstance(resp, dict):
+                score = resp.get("score", 0)
+                q_text = resp.get("question", "")
+                ans_lbl = resp.get("answerLabel", "")
+                if score >= 2:
+                    high_triggers.append(f"- Weak Spot: '{q_text}' (User selected: {ans_lbl}, score {score}/3)")
+
+    if severity_level == "minor":
+        intensity_guidance = (
+            f"DIAGNOSTIC PROTOCOL: MINOR DEPENDENCY ({target_days}-Day Rapid Reset, Severity Score: {severity_score}/10).\n"
+            "Focus on boundary setting, mindful replacement habits, and environment friction tweaks rather than extreme cold-turkey isolation."
+        )
+    elif severity_level == "severe":
+        intensity_guidance = (
+            f"DIAGNOSTIC PROTOCOL: SEVERE DEPENDENCY ({target_days}-Day Deep Stabilization & Tapering, Severity Score: {severity_score}/10).\n"
+            "Focus on acute withdrawal management, high-friction physical barriers, nervous system down-regulation, and gradual tapering."
+        )
+    else:
+        intensity_guidance = (
+            f"DIAGNOSTIC PROTOCOL: MODERATE COMPULSIVE LOOP ({target_days}-Day Neuroplastic Rewiring, Severity Score: {severity_score}/10).\n"
+            "Focus on dopamine scheduling, trigger interruption, and structured time-blocking."
+        )
 
     # Combine input urge triggers with recent urge logs from Supabase
     db_triggers = fetch_recent_urge_triggers_from_db(biometrics.user_id, biometrics.track)
@@ -343,13 +379,14 @@ def generate_daily_prescription(biometrics: BiometricInput) -> PrescriptionRespo
 
         prompt = f"""
 You are the Chief Clinical Officer of NIVARAN, a medical-grade mind-growth and recovery AI platform.
-Generate a comprehensive, scientifically rigorous daily prescription for this user based on their exact metrics, recovery phase, clinical guardrails, and urge history.
+Generate a comprehensive, scientifically rigorous daily prescription for this user based on their exact metrics, diagnostic assessment, recovery timeline, clinical guardrails, and urge history.
 
-USER CLINICAL PROFILE:
+USER CLINICAL & DIAGNOSTIC PROFILE:
 - Username: {biometrics.username or 'Seeker'}
 - Recovery Track: {biometrics.track} (sm=Mobile/Screen Detox, sa=Smoking/Alcohol, gm=Compulsive Gaming, jf=Junk Food/Sugar)
-- Day Number: Day {biometrics.day_number}
+- Dynamic Timeline: Day {effective_day} of {target_days} Total Days
 - Recovery Phase: Phase {metrics.phase} ({metrics.phase_name})
+- Addiction Diagnostic Baseline: Severity Score {severity_score}/10.0 ({severity_level.upper()} dependency)
 - Biometrics: Age {biometrics.age}, Gender {biometrics.gender}, Height {biometrics.height_cm} cm, Weight {biometrics.weight_kg} kg
 - Deterministic Math: BMI {metrics.bmi} ({metrics.bmi_category}), BMR {metrics.bmr} kcal, TDEE {metrics.tdee} kcal
 - Target Calories: {metrics.target_calories} kcal
@@ -357,7 +394,13 @@ USER CLINICAL PROFILE:
 - Dietary Preference: {biometrics.dietary_preference}
 - Medical Flags: {biometrics.medical_flags}
 - Medical Notes: {biometrics.medical_notes}
-- Recent Urge Triggers (Urge Telemetry): {all_triggers if all_triggers else 'None logged yet'}
+- Recent Craving Wave Logs: {all_triggers if all_triggers else 'None logged yet'}
+
+HIGH-FRICTION DIAGNOSTIC WEAK SPOTS IDENTIFIED (SCORE 2 OR 3):
+{chr(10).join(high_triggers) if high_triggers else '- General habit momentum management'}
+
+CLINICAL INTENSITY & TIMELINE CALIBRATION:
+{intensity_guidance}
 
 CLINICAL GUARDRAILS (STRICT COMPLIANCE MANDATORY):
 - Allowed Physical Intensity: {guardrails['allowed_intensity']}
@@ -366,10 +409,17 @@ CLINICAL GUARDRAILS (STRICT COMPLIANCE MANDATORY):
 - Safety Warnings: {json.dumps(guardrails['safety_warnings'])}
 - Recommended Workout Duration: {guardrails['recommended_workout_duration']} mins
 
+PRESCRIPTION DIRECTIVES:
+1. Special Mission: Provide a concrete, highly targeted 1-2 sentence core challenge countering one of the user's highest diagnostic weak spots (e.g. morning reflex, late-night screen, stress escapism) calibrated to {severity_level} intensity.
+2. Routine Tasks: Provide 4-5 actionable daily checkbox habits. At least 2 tasks MUST directly disrupt their identified diagnostic triggers.
+3. Nutrition Plan: Respect the {metrics.target_calories} kcal target, {metrics.hydration_liters}L hydration, dietary preference ({biometrics.dietary_preference}), and medical flags.
+4. Movement Protocol: Adhere strictly to the {guardrails['recommended_workout_duration']}-min duration and {guardrails['allowed_intensity']} limit.
+5. Neuro Reset: Provide vagus nerve / mindfulness regulation and audio focus cues.
+
 OUTPUT REQUIREMENTS:
 Output a single valid JSON object strictly matching this schema:
 {{
-  "special_mission": "1-2 sentence core daily behavioral challenge addressing the recovery track and phase.",
+  "special_mission": "1-2 sentence core daily behavioral challenge addressing the recovery track, timeline, and weak spots.",
   "routine_tasks": [
     "4-5 actionable habit tasks for the day"
   ],
@@ -396,13 +446,13 @@ Output a single valid JSON object strictly matching this schema:
   "neuro_reset": {{
     "summary": "Mindfulness & neuroplastic regulation summary",
     "duration_mins": 15,
-    "mindfulness_tip": "Specific urge surfing or cognitive reframing tip for track '{biometrics.track}'",
+    "mindfulness_tip": "Specific urge surfing or cognitive reframing tip for track '{biometrics.track}' and severity {severity_level}",
     "meditation_url": "{MEDIA_RESOURCES['craving_meditation']}",
     "music_type": "Binaural 432Hz Calm Mind Recovery",
     "audio_focus_link": "{MEDIA_RESOURCES['binaural_dopamine']}",
-    "lifestyle_tip": "Actionable neuroplastic habit cue for Phase {metrics.phase}"
+    "lifestyle_tip": "Actionable neuroplastic habit cue for Day {effective_day} of {target_days}"
   }},
-  "why_this_works": "Scientific explanation of how today's protocol rewires dopamine receptors and prefrontal executive control"
+  "why_this_works": "Scientific explanation of how today's protocol rewires dopamine receptors and prefrontal executive control based on diagnostic baseline"
 }}
 """
 

@@ -3,6 +3,7 @@ from app.schemas.prescription import (
     GenderType,
     ActivityLevel,
     BiometricInput,
+    PrescriptionRequest,
     ComputedMetrics,
     DietProtocol,
     ExerciseRoutineItem,
