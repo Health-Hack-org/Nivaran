@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Optional
+from typing import Optional, Any
 from fastapi import APIRouter, HTTPException, status
 from app.schemas.prescription import (
     BiometricInput,
@@ -25,6 +25,20 @@ def _is_valid_uuid(val: Optional[str]) -> bool:
         return True
     except (ValueError, AttributeError, TypeError):
         return False
+
+
+def _to_dict(val: Any) -> dict[str, Any]:
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, str):
+        try:
+            import json
+            parsed = json.loads(val)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+    return {}
 
 
 @router.post("/generate", response_model=PrescriptionResponse, status_code=status.HTTP_200_OK)
@@ -68,9 +82,9 @@ async def generate_prescription(biometrics: BiometricInput):
                         computed_metrics=metrics,
                         special_mission=row["special_mission"],
                         routine_tasks=row["routine_tasks"],
-                        diet_protocol=DietProtocol(**row["diet_protocol"]),
-                        exercise_protocol=ExerciseProtocol(**row["exercise_protocol"]),
-                        mental_protocol=MentalProtocol(**row["mental_protocol"]),
+                        diet_protocol=DietProtocol(**_to_dict(row.get("diet_protocol"))),
+                        exercise_protocol=ExerciseProtocol(**_to_dict(row.get("exercise_protocol"))),
+                        mental_protocol=MentalProtocol(**_to_dict(row.get("mental_protocol"))),
                         why_this_works=row.get("why_this_works") or (
                             f"In {metrics.phase_name} (Day {row['day_number']}), structured routine "
                             f"and metabolic balance stimulate neuroplastic dopamine normalization."
