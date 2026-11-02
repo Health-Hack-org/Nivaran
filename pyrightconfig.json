@@ -1,0 +1,12 @@
+{
+  "venvPath": "apps/api",
+  "venv": "venv",
+  "extraPaths": [
+    "apps/api"
+  ],
+  "include": [
+    "apps/api"
+  ],
+  "typeCheckingMode": "basic"
+}
+

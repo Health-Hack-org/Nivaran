@@ -238,7 +238,7 @@ export default function ExplorePage() {
             activeUser = userData.user;
             setCurrentUser(userData.user);
           }
-        } catch {}
+        } catch { }
       }
 
       const userId = activeUser?.id || userProfile?.id || "user-" + Date.now();
@@ -323,11 +323,11 @@ export default function ExplorePage() {
         try {
           const { data: userData } = await supabase.auth.getUser();
           if (userData?.user) activeUser = userData.user;
-        } catch {}
+        } catch { }
       }
 
       const userId = activeUser?.id || userProfile?.id || "user-" + Date.now();
-      const profile = userProfile || {
+      const profile: UserProfile = userProfile || {
         id: userId,
         username: bioUsername || "Seeker",
         age: bioAge,
@@ -549,11 +549,10 @@ export default function ExplorePage() {
                 <button
                   key={link.id}
                   onClick={() => scrollTo(link.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
-                    isActive
+                  className={`px-3.5 py-1.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${isActive
                       ? "text-[#2D221A] font-semibold bg-[#F0ECE7]"
                       : "text-[#6E5D52] hover:text-[#2D221A] hover:bg-[#F0ECE7]/60"
-                  }`}
+                    }`}
                 >
                   {link.label}
                 </button>
@@ -601,11 +600,10 @@ export default function ExplorePage() {
             <button
               key={link.id}
               onClick={() => scrollTo(link.id)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                activeSection === link.id
+              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${activeSection === link.id
                   ? "bg-[#8C6A4F] text-white"
                   : "bg-white text-[#6E5D52] border border-[#EAE5DE]"
-              }`}
+                }`}
             >
               {link.label}
             </button>
@@ -637,10 +635,10 @@ export default function ExplorePage() {
             <span className="w-2 h-2 rounded-full bg-[#8C6A4F]" />
             About NIVARAN
           </div>
-          
+
           <div className="bg-white rounded-2xl p-6 sm:p-8 border border-[#EAE5DE] shadow-xs space-y-4">
             <p className="text-base sm:text-lg text-[#2D221A] leading-relaxed">
-              NIVARAN is an open-access clinical wellness sanctuary engineered by <strong>THE HEXA-GRAMS</strong>. 
+              NIVARAN is an open-access clinical wellness sanctuary engineered by <strong>THE HEXA-GRAMS</strong>.
               We replace vague willpower platitudes with deterministic biometric calculations to stabilize the body so the mind can heal.
             </p>
 
@@ -907,11 +905,10 @@ export default function ExplorePage() {
                           <div
                             key={t.id}
                             onClick={() => setSelectedTrack(t.id)}
-                            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-2 select-none ${
-                              isSelected
+                            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-2 select-none ${isSelected
                                 ? "border-[#8C6A4F] bg-[#8C6A4F]/10 shadow-xs"
                                 : "border-[#E8EEE7] bg-white hover:border-[#8C6A4F]/40"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center justify-between">
                               <div
@@ -1077,11 +1074,10 @@ export default function ExplorePage() {
                                     : [...prev, flag.id]
                                 );
                               }}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                                isChecked
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${isChecked
                                   ? "bg-[#E8EEE7] border-[#8C6A4F] text-[#35291F] font-bold shadow-xs"
                                   : "bg-white border-[#E8EEE7] text-[#35291F]/70 hover:border-[#8C6A4F]/50"
-                              }`}
+                                }`}
                             >
                               {isChecked ? "✓ " : "+ "}
                               {flag.label}
@@ -1147,9 +1143,8 @@ export default function ExplorePage() {
                             <div
                               className="h-full rounded-full bg-[#8C6A4F] transition-all duration-300"
                               style={{
-                                width: `${
-                                  ((surveyQuestionIndex + 1) / activeSurvey.questions.length) * 100
-                                }%`,
+                                width: `${((surveyQuestionIndex + 1) / activeSurvey.questions.length) * 100
+                                  }%`,
                               }}
                             />
                           </div>
@@ -1174,22 +1169,20 @@ export default function ExplorePage() {
                                 key={opt.score}
                                 type="button"
                                 onClick={() => handleSelectSurveyOption(opt.score)}
-                                className={`p-3.5 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 select-none active:scale-[0.99] ${
-                                  isChosen
+                                className={`p-3.5 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 select-none active:scale-[0.99] ${isChosen
                                     ? "border-[#8C6A4F] bg-[#8C6A4F]/10 shadow-xs ring-1 ring-[#8C6A4F]"
                                     : "border-[#EAE5DE] bg-white hover:border-[#8C6A4F]/50 hover:bg-[#FAF8F5]"
-                                }`}
+                                  }`}
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="font-bold text-xs text-[#2D221A]">
                                     {opt.label}
                                   </span>
                                   <span
-                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                      isChosen
+                                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isChosen
                                         ? "bg-[#8C6A4F] text-white"
                                         : "bg-[#F0ECE7] text-[#6E5D52]"
-                                    }`}
+                                      }`}
                                   >
                                     {opt.score} {opt.score === 1 ? "pt" : "pts"}
                                   </span>
@@ -1269,13 +1262,12 @@ export default function ExplorePage() {
                             </h4>
                           </div>
                           <span
-                            className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                              diagnosticResult.severityLevel === "minor"
+                            className={`px-3 py-1 rounded-full text-xs font-bold border ${diagnosticResult.severityLevel === "minor"
                                 ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                                 : diagnosticResult.severityLevel === "severe"
-                                ? "bg-rose-50 text-rose-800 border-rose-200"
-                                : "bg-amber-50 text-amber-800 border-amber-200"
-                            }`}
+                                  ? "bg-rose-50 text-rose-800 border-rose-200"
+                                  : "bg-amber-50 text-amber-800 border-amber-200"
+                              }`}
                           >
                             {diagnosticResult.classificationTitle}
                           </span>
