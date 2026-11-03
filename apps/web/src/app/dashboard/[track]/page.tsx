@@ -36,6 +36,9 @@ export default function TrackDashboardPage({ params }: { params: { track: string
                   streak: parsed[track].streak || 0,
                   shields: parsed[track].shields || 1,
                   target_days: parsed[track].targetDays || 28,
+                  severity_score: parsed[track].severityScore,
+                  severity_level: parsed[track].severityLevel,
+                  survey_responses: parsed[track].surveyResponses,
                 })
               );
             }

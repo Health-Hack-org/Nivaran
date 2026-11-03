@@ -394,6 +394,33 @@ export default function ExplorePage() {
         })
       );
 
+      // Ensure all_tracks_progress has user's selected track with target_days immediately
+      try {
+        let currentAllProgress: Record<string, any> = {
+          sm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+          sa: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+          gm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+          jf: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+        };
+        const rawAll = localStorage.getItem("nivaran_all_tracks_progress");
+        if (rawAll) {
+          const parsedAll = JSON.parse(rawAll);
+          currentAllProgress = { ...currentAllProgress, ...parsedAll };
+        }
+        currentAllProgress[selectedTrack] = {
+          currentDay: 1,
+          streak: 0,
+          shields: 1,
+          targetDays: diagnosticResult.targetDays,
+          severityScore: diagnosticResult.severityScore,
+          severityLevel: diagnosticResult.severityLevel,
+          surveyResponses: diagnosticResult.surveyResponses,
+        };
+        localStorage.setItem("nivaran_all_tracks_progress", JSON.stringify(currentAllProgress));
+      } catch (storageErr) {
+        console.warn("Failed saving all_tracks_progress:", storageErr);
+      }
+
       // 3. Make POST request to FastAPI to generate Day 1 prescription with diagnostic baseline
       const prescriptionPayload: BiometricInput = {
         user_id: userId,
@@ -416,7 +443,13 @@ export default function ExplorePage() {
 
       try {
         const rx = await generatePrescription(prescriptionPayload);
-        localStorage.setItem("nivaran_prescription", JSON.stringify(rx));
+        if (rx) {
+          localStorage.setItem("nivaran_prescription", JSON.stringify(rx));
+          localStorage.setItem(`nivaran_prescription_${selectedTrack}`, JSON.stringify(rx));
+          localStorage.setItem(`nivaran_rx_${userId}_${selectedTrack}_day_1`, JSON.stringify(rx));
+          localStorage.setItem(`nivaran_rx_${selectedTrack}_day_1`, JSON.stringify(rx));
+          localStorage.setItem(`nivaran_rx_${selectedTrack}_1`, JSON.stringify(rx));
+        }
       } catch (apiErr) {
         console.warn("Prescription fallback:", apiErr);
       }
@@ -570,12 +603,25 @@ export default function ExplorePage() {
             </Link>
 
             <SpecularButton
+              size="md"
+              radius={12}
+              tint="#8C6A4F"
+              baseColor="#73543B"
+              lineColor="#FFFFFF"
+              textColor="#FFFFFF"
+              intensity={1.25}
+              idleIntensity={0.4}
+              shineSize={14}
+              shineFade={36}
+              thickness={1.4}
+              glow={1}
+              followMouse={true}
               proximity={250}
               onClick={() => handleOpenModal()}
               className="h-10 px-5 text-sm font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
             >
               <Sparkles className="w-4 h-4 text-white shrink-0" />
-              <span>Get Started</span>
+              <span>Get Started with Your Recovery</span>
             </SpecularButton>
           </div>
         </div>
@@ -773,16 +819,29 @@ export default function ExplorePage() {
             Ready to Begin?
           </h2>
           <p className="max-w-md mx-auto text-sm text-[#6E5D52]">
-            Start your personalized 28-day recovery journey today.
+            Start your personalized recovery journey today.
           </p>
           <div className="pt-2 flex justify-center">
             <SpecularButton
+              size="lg"
+              radius={12}
+              tint="#8C6A4F"
+              baseColor="#73543B"
+              lineColor="#FFFFFF"
+              textColor="#FFFFFF"
+              intensity={1.25}
+              idleIntensity={0.45}
+              shineSize={16}
+              shineFade={36}
+              thickness={1.5}
+              glow={1}
+              followMouse={true}
               proximity={250}
               onClick={() => handleOpenModal()}
               className="px-8 py-3.5 text-base font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
             >
               <Sparkles className="w-4 h-4 text-white shrink-0" />
-              <span>Choose Your Recovery Plan</span>
+              <span>Get Started with Your Recovery</span>
             </SpecularButton>
           </div>
         </section>

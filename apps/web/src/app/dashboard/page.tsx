@@ -305,8 +305,10 @@ function persistTaskStateToStorage(
  */
 function isDefaultFallbackTasks(rx: PrescriptionResponse | null | undefined): boolean {
   if (!rx) return true;
-  if (!Array.isArray(rx.routine_tasks) || rx.routine_tasks.length < 6) return true;
+  if (!Array.isArray(rx.routine_tasks) || rx.routine_tasks.length === 0) return true;
   if (
+    rx.track === "sm" &&
+    Number(rx.day_number) === 1 &&
     rx.special_mission === DEFAULT_PRESCRIPTION.special_mission &&
     rx.routine_tasks[0] === DEFAULT_PRESCRIPTION.routine_tasks[0] &&
     rx.routine_tasks[1] === DEFAULT_PRESCRIPTION.routine_tasks[1]
@@ -328,7 +330,9 @@ function getValidCachedPrescription(
   const candidateKeys = [
     `nivaran_rx_${userId || "guest"}_${track}_day_${day}`,
     `nivaran_rx_${userId || "guest"}_${track}_${day}`,
+    `nivaran_rx_${track}_day_${day}`,
     `nivaran_rx_${track}_${day}`,
+    `nivaran_prescription_${track}`,
     "nivaran_prescription"
   ];
 
@@ -342,7 +346,7 @@ function getValidCachedPrescription(
           parsed.track === track &&
           Number(parsed.day_number) === Number(day) &&
           Array.isArray(parsed.routine_tasks) &&
-          parsed.routine_tasks.length >= 6 &&
+          parsed.routine_tasks.length > 0 &&
           !isDefaultFallbackTasks(parsed)
         ) {
           return parsed;
@@ -401,23 +405,99 @@ interface DashboardTrackProgress {
 export default function DashboardPage() {
   const router = useRouter();
 
-  // Core State
-  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
-  const [currentTrack, setCurrentTrack] = useState<TrackType>("sm");
+  // Core State - initialized lazily from localStorage so page reload preserves active track & progress instantly
+  const [profile, setProfile] = useState<UserProfile>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("nivaran_profile");
+        if (saved) return { ...DEFAULT_PROFILE, ...JSON.parse(saved) };
+      } catch {}
+    }
+    return DEFAULT_PROFILE;
+  });
+
+  const [currentTrack, setCurrentTrack] = useState<TrackType>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("nivaran_profile");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.active_track && ["sm", "sa", "gm", "jf"].includes(parsed.active_track)) {
+            return parsed.active_track as TrackType;
+          }
+        }
+        const savedProgress = localStorage.getItem("nivaran_track_progress");
+        if (savedProgress) {
+          const parsed = JSON.parse(savedProgress);
+          if (parsed.track && ["sm", "sa", "gm", "jf"].includes(parsed.track)) {
+            return parsed.track as TrackType;
+          }
+        }
+      } catch {}
+    }
+    return "sm";
+  });
+
   const [allTracksProgress, setAllTracksProgress] = useState<
     Record<TrackType, DashboardTrackProgress>
-  >({
-    sm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
-    sa: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
-    gm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
-    jf: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+  >(() => {
+    const defaultProgress: Record<TrackType, DashboardTrackProgress> = {
+      sm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+      sa: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+      gm: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+      jf: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
+    };
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("nivaran_all_tracks_progress");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          Object.keys(parsed).forEach((k) => {
+            const t = k as TrackType;
+            if (t in defaultProgress) {
+              defaultProgress[t] = { ...defaultProgress[t], ...parsed[t] };
+            }
+          });
+        }
+        const single = localStorage.getItem("nivaran_track_progress");
+        if (single) {
+          const parsed = JSON.parse(single);
+          const t = parsed.track as TrackType;
+          if (t && t in defaultProgress) {
+            defaultProgress[t] = {
+              ...defaultProgress[t],
+              currentDay: parsed.current_day || defaultProgress[t].currentDay,
+              streak: parsed.streak ?? defaultProgress[t].streak,
+              shields: parsed.shields ?? defaultProgress[t].shields,
+              targetDays: parsed.target_days || parsed.targetDays || defaultProgress[t].targetDays,
+              severityScore: parsed.severity_score !== undefined ? Number(parsed.severity_score) : defaultProgress[t].severityScore,
+              severityLevel: parsed.severity_level || defaultProgress[t].severityLevel,
+              surveyResponses: parsed.survey_responses || defaultProgress[t].surveyResponses,
+            };
+          }
+        }
+      } catch {}
+    }
+    return defaultProgress;
   });
 
   const [isMounted, setIsMounted] = useState<boolean>(false);
-  const [prescription, setPrescription] = useState<PrescriptionResponse>(DEFAULT_PRESCRIPTION);
+  const [prescription, setPrescription] = useState<PrescriptionResponse>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedProfile = localStorage.getItem("nivaran_profile");
+        const activeTrack = (savedProfile ? JSON.parse(savedProfile).active_track : null) || "sm";
+        const savedProgress = localStorage.getItem("nivaran_track_progress");
+        const activeDay = (savedProgress ? JSON.parse(savedProgress).current_day : null) || 1;
+        const cached = getValidCachedPrescription(null, activeTrack, activeDay);
+        if (cached) return cached;
+      } catch {}
+    }
+    return DEFAULT_PRESCRIPTION;
+  });
+
   const [isLoadingPrescription, setIsLoadingPrescription] = useState<boolean>(false);
   const activeReqRef = React.useRef<string>("");
-  const hasInitializedRef = React.useRef<boolean>(false);
   const lockedPrescriptionRef = React.useRef<{
     track: TrackType;
     day: number;
@@ -486,8 +566,6 @@ export default function DashboardPage() {
   // ========================================================
   useEffect(() => {
     setIsMounted(true);
-    if (hasInitializedRef.current) return;
-    hasInitializedRef.current = true;
     let isSubscribed = true;
 
     async function initializeDashboard() {
@@ -1135,6 +1213,25 @@ export default function DashboardPage() {
 
     if (typeof window !== "undefined") {
       localStorage.setItem("nivaran_profile", JSON.stringify(updated));
+      const trkProg = allTracksProgress[track] || {
+        currentDay: day,
+        streak: 0,
+        shields: 1,
+        targetDays: 28,
+      };
+      localStorage.setItem(
+        "nivaran_track_progress",
+        JSON.stringify({
+          track,
+          current_day: trkProg.currentDay || day,
+          streak: trkProg.streak || 0,
+          shields: trkProg.shields || 1,
+          target_days: trkProg.targetDays || 28,
+          severity_score: trkProg.severityScore,
+          severity_level: trkProg.severityLevel,
+          survey_responses: trkProg.surveyResponses,
+        })
+      );
     }
 
     // Immediately restore tasks and day completion for selected track from dual-layer localStorage
@@ -1327,6 +1424,7 @@ export default function DashboardPage() {
       localStorage.setItem("nivaran_all_tracks_progress", JSON.stringify(updatedTracksProgress));
       localStorage.setItem("nivaran_track_progress", JSON.stringify(progressPayload));
       localStorage.setItem(`nivaran_track_progress_${profile.id || "guest"}_${currentTrack}`, JSON.stringify(progressPayload));
+      localStorage.setItem("nivaran_profile", JSON.stringify({ ...profile, active_track: currentTrack }));
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
@@ -1420,9 +1518,7 @@ export default function DashboardPage() {
 
             {/* Active Track Name Pill */}
             <span className="text-xs sm:text-sm font-medium text-[#6E5D52] bg-[#F0ECE7] px-3 py-1 rounded-full truncate">
-              {!isMounted
-                ? "Mobile & Screen Detox · Day 1"
-                : `${trackTitles[currentTrack] || "Recovery Track"} · Day ${currentDayNumber}`}
+              `${trackTitles[currentTrack] || "Recovery Track"} · Day ${currentDayNumber}`
             </span>
           </div>
 
@@ -1475,7 +1571,7 @@ export default function DashboardPage() {
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="text-2xl sm:text-3xl font-black text-[#2D221A]">
-                    Day {!isMounted ? 1 : currentDayNumber} <span className="text-[#6E5D52] font-semibold text-lg sm:text-xl">/ {!isMounted ? 28 : targetDays}</span>
+                    Day {currentDayNumber} <span className="text-[#6E5D52] font-semibold text-lg sm:text-xl">/ {targetDays}</span>
                   </span>
                   {isMounted && activeTrackProgress.severityScore && (
                     <span
@@ -1494,18 +1590,16 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <span className="text-xs text-[#6E5D52] font-medium block mt-0.5">
-                  {!isMounted
-                    ? "Phase 1 · Acute Stabilization"
-                    : `Phase ${prescription.phase || 1} · ${
-                        prescription.phase_name?.replace(/^Phase \d+\s*[·-]\s*/, "") || "Acute Stabilization"
-                      }`}
+                  `Phase ${prescription.phase || 1} · ${
+                    prescription.phase_name?.replace(/^Phase \d+\s*[·-]\s*/, "") || "Acute Stabilization"
+                  }`
                 </span>
               </div>
 
               {/* Streak Counter */}
               <div className="bg-[#F0ECE7] text-[#8C6A4F] border border-[#EAE5DE] px-3.5 py-1.5 rounded-xl font-bold text-sm sm:text-base flex items-center gap-1.5">
                 <Flame className="w-4 h-4 fill-[#8C6A4F] text-[#8C6A4F]" />
-                <span>{!isMounted ? 0 : (activeTrackProgress.streak || 0)} Days Streak</span>
+                <span>{activeTrackProgress.streak || 0} Days Streak</span>
               </div>
             </div>
 
@@ -1529,7 +1623,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between border-b border-[#EAE5DE] pb-3">
               <h2 className="text-lg font-bold text-[#2D221A]">Daily Tasks</h2>
               <span className="text-xs font-semibold text-[#6E5D52]">
-                {!isMounted ? "0 / 7 Completed" : `${completedTasks} / ${totalTasks} Completed`}
+                `${completedTasks} / ${totalTasks} Completed`
               </span>
             </div>
 
@@ -1558,14 +1652,14 @@ export default function DashboardPage() {
                   Special Mission
                 </span>
                 <p className={`text-xs sm:text-sm font-semibold leading-relaxed ${taskState.specialMission ? "line-through text-[#6E5D52]" : "text-[#2D221A]"}`}>
-                  {!isMounted ? DEFAULT_PRESCRIPTION.special_mission : prescription.special_mission}
+                  prescription.special_mission
                 </p>
               </div>
             </div>
 
             {/* Routine Checklist using SpringCheck */}
             <SpringCheck
-              tasks={!isMounted ? DEFAULT_PRESCRIPTION.routine_tasks : routineTasksList}
+              tasks={routineTasksList}
               checkedState={taskState.routineTasks}
               onToggleTask={toggleRoutineTask}
             />

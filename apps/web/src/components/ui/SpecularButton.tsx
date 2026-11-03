@@ -519,7 +519,18 @@ const SpecularButton: React.FC<SpecularButtonProps> = ({
       }
       {...rest}
     >
-      <canvas ref={canvasRef} className="specular-button__light" aria-hidden="true" />
+      <canvas
+        ref={canvasRef}
+        className="specular-button__light"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+        }}
+        aria-hidden="true"
+      />
       <span className="specular-button__label">{children}</span>
     </button>
   );
