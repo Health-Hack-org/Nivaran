@@ -85,7 +85,16 @@ export default function ExplorePage() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
   // Conditional dashboard button: only true if authenticated user has active row in track_progress
-  const [hasActiveTrackProgress, setHasActiveTrackProgress] = useState(false);
+  const [hasActiveTrackProgress, setHasActiveTrackProgress] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const trk = localStorage.getItem("nivaran_track_progress");
+        const all = localStorage.getItem("nivaran_all_tracks_progress");
+        if (trk || all) return true;
+      } catch {}
+    }
+    return false;
+  });
 
   // Helper: profile fresh check (updated within past 30 days)
   const isProfileFresh = (prof: UserProfile | null): boolean => {
@@ -109,17 +118,23 @@ export default function ExplorePage() {
           try {
             const { data: trk } = await supabase
               .from("track_progress")
-              .select("id")
+              .select("id, track, current_day")
               .eq("user_id", data.user.id)
               .limit(1);
 
             if (trk && trk.length > 0) {
               setHasActiveTrackProgress(true);
+              if (trk[0].track) {
+                setSelectedTrack(trk[0].track as TrackType);
+              }
             } else {
-              setHasActiveTrackProgress(false);
+              // Also check localStorage as backup
+              const localTrack = localStorage.getItem("nivaran_track_progress");
+              setHasActiveTrackProgress(Boolean(localTrack));
             }
           } catch {
-            setHasActiveTrackProgress(false);
+            const localTrack = localStorage.getItem("nivaran_track_progress");
+            setHasActiveTrackProgress(Boolean(localTrack));
           }
 
           // Check profile row
@@ -642,41 +657,56 @@ export default function ExplorePage() {
             })}
           </nav>
 
-          {/* Right Buttons: [ThemeToggle] & [Dashboard] & [Get Started] */}
+          {/* Right Buttons: [ThemeToggle] & [Return to Dashboard] (if recovery in progress) OR [Get Started with Your Recovery] */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <ThemeToggle />
 
-            {hasActiveTrackProgress && (
-              <Link
-                href="/dashboard"
-                className="bg-[#F0ECE7] hover:bg-[#EAE5DE] text-[#2D221A] text-sm font-semibold px-4 py-2 rounded-xl border border-[#EAE5DE] transition-colors inline-flex items-center gap-1.5 h-10"
-              >
-                <span>Dashboard</span>
-                <ArrowRight className="w-3.5 h-3.5 text-[#2D221A]" />
+            {hasActiveTrackProgress ? (
+              <Link href="/dashboard" className="text-decoration-none">
+                <SpecularButton
+                  size="md"
+                  radius={12}
+                  tint="#8C6A4F"
+                  baseColor="#73543B"
+                  lineColor="#FFFFFF"
+                  textColor="#FFFFFF"
+                  intensity={1.25}
+                  idleIntensity={0.4}
+                  shineSize={14}
+                  shineFade={36}
+                  thickness={1.4}
+                  glow={1}
+                  followMouse={true}
+                  proximity={250}
+                  className="h-10 px-5 text-sm font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
+                >
+                  <span>Return to Dashboard</span>
+                  <ArrowRight className="w-4 h-4 text-white shrink-0" />
+                </SpecularButton>
               </Link>
+            ) : (
+              <SpecularButton
+                size="md"
+                radius={12}
+                tint="#8C6A4F"
+                baseColor="#73543B"
+                lineColor="#FFFFFF"
+                textColor="#FFFFFF"
+                intensity={1.25}
+                idleIntensity={0.4}
+                shineSize={14}
+                shineFade={36}
+                thickness={1.4}
+                glow={1}
+                followMouse={true}
+                proximity={250}
+                onClick={() => handleOpenModal()}
+                className="h-10 px-5 text-sm font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
+              >
+                <Sparkles className="w-4 h-4 text-white shrink-0" />
+                <span>Get Started with Your Recovery</span>
+              </SpecularButton>
             )}
-
-            <SpecularButton
-              size="md"
-              radius={12}
-              tint="#8C6A4F"
-              baseColor="#73543B"
-              lineColor="#FFFFFF"
-              textColor="#FFFFFF"
-              intensity={1.25}
-              idleIntensity={0.4}
-              shineSize={14}
-              shineFade={36}
-              thickness={1.4}
-              glow={1}
-              followMouse={true}
-              proximity={250}
-              onClick={() => handleOpenModal()}
-              className="h-10 px-5 text-sm font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
-            >
-              <Sparkles className="w-4 h-4 text-white shrink-0" />
-              <span>Get Started with Your Recovery</span>
-            </SpecularButton>
           </div>
         </div>
 
@@ -795,13 +825,23 @@ export default function ExplorePage() {
                   </div>
 
                   <div className="pt-4 mt-4 border-t border-[#EAE5DE]">
-                    <button
-                      onClick={() => handleOpenModal(t.id)}
-                      className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer shadow-xs bg-[#8C6A4F] hover:bg-[#73543B] active:scale-95 flex items-center justify-center gap-1.5"
-                    >
-                      <span>Select Your Track</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    {hasActiveTrackProgress && (userProfile?.active_track === t.id || selectedTrack === t.id) ? (
+                      <Link
+                        href="/dashboard"
+                        className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer shadow-xs bg-[#8C6A4F] hover:bg-[#73543B] active:scale-95 flex items-center justify-center gap-1.5 text-decoration-none"
+                      >
+                        <span>Continue in Dashboard</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenModal(t.id)}
+                        className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer shadow-xs bg-[#8C6A4F] hover:bg-[#73543B] active:scale-95 flex items-center justify-center gap-1.5"
+                      >
+                        <span>{hasActiveTrackProgress ? "Switch to this Track" : "Select Your Track"}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -870,33 +910,60 @@ export default function ExplorePage() {
         {/* 5. BOTTOM CTA */}
         <section className="relative z-10 bg-white rounded-2xl p-8 sm:p-12 border border-[#EAE5DE] shadow-xs text-center space-y-4">
           <h2 className="text-2xl sm:text-3xl font-black text-[#2D221A] tracking-tight">
-            Ready to Begin?
+            {hasActiveTrackProgress ? "Your Recovery is in Progress" : "Ready to Begin?"}
           </h2>
           <p className="max-w-md mx-auto text-sm text-[#6E5D52]">
-            Start your personalized recovery journey today.
+            {hasActiveTrackProgress
+              ? "Continue your daily missions, mindful routines, and streak milestones in your sanctuary."
+              : "Start your personalized recovery journey today."}
           </p>
           <div className="pt-2 flex justify-center">
-            <SpecularButton
-              size="lg"
-              radius={12}
-              tint="#8C6A4F"
-              baseColor="#73543B"
-              lineColor="#FFFFFF"
-              textColor="#FFFFFF"
-              intensity={1.25}
-              idleIntensity={0.45}
-              shineSize={16}
-              shineFade={36}
-              thickness={1.5}
-              glow={1}
-              followMouse={true}
-              proximity={250}
-              onClick={() => handleOpenModal()}
-              className="px-8 py-3.5 text-base font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
-            >
-              <Sparkles className="w-4 h-4 text-white shrink-0" />
-              <span>Get Started with Your Recovery</span>
-            </SpecularButton>
+            {hasActiveTrackProgress ? (
+              <Link href="/dashboard" className="text-decoration-none">
+                <SpecularButton
+                  size="lg"
+                  radius={12}
+                  tint="#8C6A4F"
+                  baseColor="#73543B"
+                  lineColor="#FFFFFF"
+                  textColor="#FFFFFF"
+                  intensity={1.25}
+                  idleIntensity={0.45}
+                  shineSize={16}
+                  shineFade={36}
+                  thickness={1.5}
+                  glow={1}
+                  followMouse={true}
+                  proximity={250}
+                  className="px-8 py-3.5 text-base font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
+                >
+                  <span>Return to Your Dashboard</span>
+                  <ArrowRight className="w-4 h-4 text-white shrink-0" />
+                </SpecularButton>
+              </Link>
+            ) : (
+              <SpecularButton
+                size="lg"
+                radius={12}
+                tint="#8C6A4F"
+                baseColor="#73543B"
+                lineColor="#FFFFFF"
+                textColor="#FFFFFF"
+                intensity={1.25}
+                idleIntensity={0.45}
+                shineSize={16}
+                shineFade={36}
+                thickness={1.5}
+                glow={1}
+                followMouse={true}
+                proximity={250}
+                onClick={() => handleOpenModal()}
+                className="px-8 py-3.5 text-base font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
+              >
+                <Sparkles className="w-4 h-4 text-white shrink-0" />
+                <span>Get Started with Your Recovery</span>
+              </SpecularButton>
+            )}
           </div>
         </section>
 
