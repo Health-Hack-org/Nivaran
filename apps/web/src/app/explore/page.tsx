@@ -196,10 +196,6 @@ export default function ExplorePage() {
   // Open modal with track
   const handleOpenModal = (trackId?: TrackType) => {
     if (trackId) setSelectedTrack(trackId);
-    if (!currentUser) {
-      router.push(`/auth?tab=signup${trackId ? `&track=${trackId}` : ""}`);
-      return;
-    }
     setAuthError("");
     setSurveyQuestionIndex(0);
     setSurveyAnswers({});
@@ -574,25 +570,12 @@ export default function ExplorePage() {
             </Link>
 
             <SpecularButton
-              size="md"
-              radius={12}
-              tint="#8C6A4F"
-              baseColor="#73543B"
-              lineColor="#FFFFFF"
-              textColor="#FFFFFF"
-              intensity={1.25}
-              idleIntensity={0.4}
-              shineSize={14}
-              shineFade={36}
-              thickness={1.4}
-              glow={1}
-              followMouse={true}
               proximity={250}
               onClick={() => handleOpenModal()}
               className="h-10 px-5 text-sm font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
             >
               <Sparkles className="w-4 h-4 text-white shrink-0" />
-              <span>Get Started with Your Recovery</span>
+              <span>Get Started</span>
             </SpecularButton>
           </div>
         </div>
@@ -794,25 +777,12 @@ export default function ExplorePage() {
           </p>
           <div className="pt-2 flex justify-center">
             <SpecularButton
-              size="lg"
-              radius={12}
-              tint="#8C6A4F"
-              baseColor="#73543B"
-              lineColor="#FFFFFF"
-              textColor="#FFFFFF"
-              intensity={1.25}
-              idleIntensity={0.45}
-              shineSize={16}
-              shineFade={36}
-              thickness={1.5}
-              glow={1}
-              followMouse={true}
               proximity={250}
               onClick={() => handleOpenModal()}
               className="px-8 py-3.5 text-base font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
             >
               <Sparkles className="w-4 h-4 text-white shrink-0" />
-              <span>Get Started with Your Recovery</span>
+              <span>Choose Your Recovery Plan</span>
             </SpecularButton>
           </div>
         </section>

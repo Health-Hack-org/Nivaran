@@ -5,11 +5,9 @@ import { Sun, Moon } from "lucide-react";
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    // Read directly from DOM to avoid any desynchronization
+    // Read directly from DOM to sync state
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
   }, []);
@@ -48,27 +46,16 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     setTheme(next);
   };
 
-  if (!mounted) {
-    return <div className="w-10 h-10 rounded-xl" />;
-  }
-
   return (
     <button
       onClick={toggleTheme}
       type="button"
       aria-label="Toggle theme"
       title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-      className={`relative w-10 h-10 rounded-xl border flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm select-none ${
-        theme === "dark"
-          ? "bg-[#2B241E] border-white/10 text-[#E2BA91] hover:border-[#E2BA91]/50"
-          : "bg-[#F0ECE7] border-[#EAE5DE] text-[#8C6A4F] hover:border-[#8C6A4F]/50"
-      } ${className}`}
+      className={`relative w-10 h-10 rounded-xl border flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm select-none bg-[#F0ECE7] border-[#EAE5DE] text-[#8C6A4F] hover:border-[#8C6A4F]/50 dark:bg-[#2B241E] dark:border-white/10 dark:text-[#E2BA91] dark:hover:border-[#E2BA91]/50 ${className}`}
     >
-      {theme === "dark" ? (
-        <Moon className="w-4 h-4 transition-transform duration-300" />
-      ) : (
-        <Sun className="w-4 h-4 transition-transform duration-300" />
-      )}
+      <Sun className="w-4 h-4 transition-transform duration-300 dark:hidden" />
+      <Moon className="w-4 h-4 transition-transform duration-300 hidden dark:block" />
     </button>
   );
 }
