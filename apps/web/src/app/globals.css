@@ -129,7 +129,7 @@ body {
   overflow-x: hidden;
   scroll-behavior: smooth;
   background-color: var(--canvas);
-  color: var(--primary);
+  color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
@@ -608,6 +608,8 @@ html.dark .bg-\[\#F0ECE7\],
 html.dark .bg-\[\#E8EEE7\],
 html.dark .bg-\[\#F5F2EB\],
 html.dark .bg-\[\#FAF8F5\],
+html.dark .bg-\[\#FAF8F0\],
+html.dark .bg-\[\#F5F5DC\],
 html.dark .bg-\[\#EAE5DE\],
 html.dark .bg-gray-100 {
   background-color: #1E1814 !important;
@@ -637,6 +639,11 @@ html.dark .border-rose-200 {
 /* 6. Text Legibility & Contrast (Pure clarity) */
 /* Bold Titles & Primary Headings: Pure Crisp White */
 html.dark .text-\[\#2D221A\],
+html.dark .text-\[\#2A1503\],
+html.dark .text-\[\#2A1503\]\/90,
+html.dark .text-\[\#2A1503\]\/80,
+html.dark .text-\[\#2A1503\]\/70,
+html.dark .text-\[\#2A1503\]\/60,
 html.dark .text-\[\#35291F\],
 html.dark h1,
 html.dark h2,
@@ -663,7 +670,11 @@ html.dark .text-gray-400 {
 }
 
 /* Accent Labels and Highlights: Vibrant Warm Gold */
-html.dark .text-\[\#8C6A4F\] {
+html.dark .text-\[\#8C6A4F\],
+html.dark .text-\[\#66350F\],
+html.dark .text-\[\#66350F\]\/70,
+html.dark .text-\[\#66350F\]\/80,
+html.dark .text-\[\#66350F\]\/90 {
   color: #E2BA91 !important;
 }
 

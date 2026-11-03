@@ -27,8 +27,8 @@ export default function TrackDashboardPage({ params }: { params: { track: string
   }, [params.track, router]);
 
   return (
-    <div className="min-h-screen bg-[#F5F5DC] flex items-center justify-center text-[#2A1503]">
-      <div className="flex items-center gap-2 text-sm font-bold text-[#66350F]">
+    <div className="min-h-screen bg-canvas flex items-center justify-center text-foreground">
+      <div className="flex items-center gap-2 text-sm font-bold text-primary dark:text-[#E2BA91]">
         <span className="animate-spin">⏳</span>
         <span>Entering {params.track.toUpperCase()} Clinical Sanctuary...</span>
       </div>
