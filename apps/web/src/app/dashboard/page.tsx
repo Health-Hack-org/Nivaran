@@ -1518,7 +1518,7 @@ export default function DashboardPage() {
 
             {/* Active Track Name Pill */}
             <span className="text-xs sm:text-sm font-medium text-[#6E5D52] bg-[#F0ECE7] px-3 py-1 rounded-full truncate">
-              `${trackTitles[currentTrack] || "Recovery Track"} · Day ${currentDayNumber}`
+              {trackTitles[currentTrack] || "Recovery Track"} · Day {currentDayNumber}
             </span>
           </div>
 
@@ -1590,9 +1590,7 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <span className="text-xs text-[#6E5D52] font-medium block mt-0.5">
-                  `Phase ${prescription.phase || 1} · ${
-                    prescription.phase_name?.replace(/^Phase \d+\s*[·-]\s*/, "") || "Acute Stabilization"
-                  }`
+                  Phase {prescription.phase || 1} · {prescription.phase_name?.replace(/^Phase \d+\s*[·-]\s*/, "") || "Acute Stabilization"}
                 </span>
               </div>
 
@@ -1623,7 +1621,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between border-b border-[#EAE5DE] pb-3">
               <h2 className="text-lg font-bold text-[#2D221A]">Daily Tasks</h2>
               <span className="text-xs font-semibold text-[#6E5D52]">
-                `${completedTasks} / ${totalTasks} Completed`
+                {completedTasks} / {totalTasks} Completed
               </span>
             </div>
 
@@ -1652,7 +1650,7 @@ export default function DashboardPage() {
                   Special Mission
                 </span>
                 <p className={`text-xs sm:text-sm font-semibold leading-relaxed ${taskState.specialMission ? "line-through text-[#6E5D52]" : "text-[#2D221A]"}`}>
-                  prescription.special_mission
+                  {prescription.special_mission}
                 </p>
               </div>
             </div>
