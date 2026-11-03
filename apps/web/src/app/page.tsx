@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { BackgroundMandalas } from "@/components/mandala/BackgroundMandalas";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { ArrowRight } from "lucide-react";
 
 export default function LandingPage() {
@@ -29,6 +30,9 @@ export default function LandingPage() {
 
   return (
     <div style={{ position: "relative", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
+      {/* Theme Switcher */}
+      <ThemeToggle className="fixed top-5 right-5 z-50" />
+
       {/* Signature Mandalas */}
       <BackgroundMandalas />
 
@@ -59,13 +63,8 @@ export default function LandingPage() {
 
           <Link
             href="/explore"
-            className="flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
+            className="landing-about-btn flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-sm"
             style={{
-              backgroundColor: "rgba(255, 253, 249, 0.8)",
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-              color: "#2D221A",
-              border: "1.5px solid #2D221A",
               borderRadius: "14px",
               padding: "16px 36px",
               fontWeight: 700,

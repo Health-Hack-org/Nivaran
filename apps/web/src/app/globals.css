@@ -56,6 +56,9 @@
 
   /* Mandala & Visual Art */
   --mandala-stroke: #2A1503;
+  --mandala-ring-1: #8B4513;
+  --mandala-ring-2: #000000;
+  --mandala-ring-3: #C19A6B;
 }
 
 html.dark {
@@ -107,7 +110,10 @@ html.dark {
   --modal-foreground: #FAF6F0;
 
   /* Mandala & Visual Art */
-  --mandala-stroke: #C69A70;
+  --mandala-stroke: #C9A47D;
+  --mandala-ring-1: #D8AA80;
+  --mandala-ring-2: #A8988B;
+  --mandala-ring-3: #E2BA91;
 }
 
 * {
@@ -222,6 +228,20 @@ body {
 
 .nivaran-btn-hero:hover {
   background: #73543B;
+}
+
+.landing-about-btn {
+  background-color: rgba(255, 253, 249, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #2D221A;
+  border: 1.5px solid #2D221A;
+  transition: all 0.2s ease;
+}
+
+.landing-about-btn:hover {
+  background-color: rgba(255, 255, 255, 0.95);
+  border-color: #66350F;
 }
 
 .about-wrapper {
@@ -757,11 +777,94 @@ html.dark .text-red-800 {
   color: #FCA5A5 !important;
 }
 
-/* 10. Mandalas Subtle Ambient Stroke */
-html.dark svg.explore-corner-mandala g,
+/* 10. Mandalas Subtle Ambient Stroke & Landing Page */
+html.dark .mandala-left,
+html.dark .mandala-right {
+  opacity: 0.28 !important;
+}
+
+html.dark .mandala-left g,
+html.dark .mandala-right g,
+html.dark svg.explore-corner-mandala g {
+  stroke: #C9A47D !important;
+}
+
+html.dark .mandala-left path,
+html.dark .mandala-right path,
+html.dark .mandala-left use,
+html.dark .mandala-right use {
+  stroke: #C9A47D !important;
+}
+
+html.dark .mandala-left circle,
+html.dark .mandala-right circle,
 html.dark svg.explore-corner-mandala circle {
   stroke: #C9A47D !important;
+}
+
+html.dark .mandala-ring-accent,
+html.dark .mandala-left circle[stroke="#8B4513"],
+html.dark .mandala-right circle[stroke="#8B4513"] {
+  stroke: #D8AA80 !important;
+}
+
+html.dark .mandala-ring-dark,
+html.dark .mandala-left circle[stroke="#000"],
+html.dark .mandala-right circle[stroke="#000"] {
+  stroke: #A8988B !important;
+}
+
+html.dark .mandala-ring-gold,
+html.dark .mandala-left circle[stroke="#C19A6B"],
+html.dark .mandala-right circle[stroke="#C19A6B"] {
+  stroke: #E2BA91 !important;
+}
+
+html.dark .mandala-dot,
+html.dark .mandala-left circle[fill="#2A1503"],
+html.dark .mandala-right circle[fill="#2A1503"] {
+  fill: #E2BA91 !important;
+}
+
+html.dark svg.explore-corner-mandala {
   opacity: 0.38;
+}
+
+/* Landing Page Dark Mode Overrides */
+html.dark .hero-title {
+  color: #FAF6F0 !important;
+}
+
+html.dark .hero-subtitle {
+  color: #DDD4CA !important;
+}
+
+html.dark .landing-about-btn {
+  background-color: rgba(36, 30, 25, 0.85) !important;
+  color: #FAF6F0 !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+html.dark .landing-about-btn:hover {
+  background-color: rgba(50, 42, 35, 0.95) !important;
+  border-color: #E2BA91 !important;
+}
+
+html.dark .about-wrapper {
+  background: rgba(30, 24, 20, 0.65) !important;
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark .about-column h3 {
+  color: #FAF6F0 !important;
+}
+
+html.dark .about-column p {
+  color: #DDD4CA !important;
+}
+
+html.dark .team-name {
+  color: #E2BA91 !important;
 }
 
 /* 11. Modal Windows & Form Controls */

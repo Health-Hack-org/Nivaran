@@ -21,7 +21,7 @@ export default function RootLayout({
               (function() {
                 try {
                   var saved = localStorage.getItem('nivaran_theme');
-                  var isDark = saved ? saved === 'dark' : true;
+                  var isDark = saved === 'dark';
                   if (isDark) {
                     document.documentElement.classList.add('dark');
                     document.documentElement.classList.remove('light');

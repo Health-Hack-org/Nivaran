@@ -12,12 +12,13 @@ export function BackgroundMandalas({ variant = "landing" }: BackgroundMandalasPr
   return (
     <>
       <svg className="mandala-left" viewBox="0 0 600 600">
-        <g transform="translate(300 300)" fill="none" stroke="#2A1503" strokeWidth="2">
+        <g transform="translate(300 300)" fill="none" stroke="var(--mandala-stroke, #2A1503)" strokeWidth="2">
           <defs>
             <path
               id="outerPetal"
               d="M0,-260 C45,-200 45,-100 0,-40 C-45,-100 -45,-200 0,-260 Z"
               fill="none"
+              stroke="var(--mandala-stroke, #2A1503)"
             />
           </defs>
           <g fill="none">
@@ -29,23 +30,24 @@ export function BackgroundMandalas({ variant = "landing" }: BackgroundMandalasPr
               />
             ))}
           </g>
-          <circle r="200" stroke="#8B4513" fill="none" />
-          <circle r="160" stroke="#000" fill="none" />
-          <circle r="120" stroke="#C19A6B" fill="none" />
+          <circle r="200" stroke="var(--mandala-ring-1, #8B4513)" fill="none" className="mandala-ring-accent" />
+          <circle r="160" stroke="var(--mandala-ring-2, #000)" fill="none" className="mandala-ring-dark" />
+          <circle r="120" stroke="var(--mandala-ring-3, #C19A6B)" fill="none" className="mandala-ring-gold" />
           <circle r="90" fill="none" />
           <circle r="65" fill="none" />
           <circle r="40" fill="none" />
-          <circle r="12" fill="#2A1503" />
+          <circle r="12" fill="var(--mandala-stroke, #2A1503)" className="mandala-dot" />
         </g>
       </svg>
 
       <svg className="mandala-right" viewBox="0 0 600 600">
-        <g transform="translate(300 300)" fill="none" stroke="#2A1503" strokeWidth="2">
+        <g transform="translate(300 300)" fill="none" stroke="var(--mandala-stroke, #2A1503)" strokeWidth="2">
           <defs>
             <path
               id="outerPetalSmall"
               d="M0,-200 C35,-150 35,-80 0,-30 C-35,-80 -35,-150 0,-200 Z"
               fill="none"
+              stroke="var(--mandala-stroke, #2A1503)"
             />
           </defs>
           <g fill="none">
@@ -57,9 +59,9 @@ export function BackgroundMandalas({ variant = "landing" }: BackgroundMandalasPr
               />
             ))}
           </g>
-          <circle r="150" stroke="#8B4513" fill="none" />
-          <circle r="110" stroke="#000" fill="none" />
-          <circle r="12" fill="#2A1503" />
+          <circle r="150" stroke="var(--mandala-ring-1, #8B4513)" fill="none" className="mandala-ring-accent" />
+          <circle r="110" stroke="var(--mandala-ring-2, #000)" fill="none" className="mandala-ring-dark" />
+          <circle r="12" fill="var(--mandala-stroke, #2A1503)" className="mandala-dot" />
         </g>
       </svg>
     </>
