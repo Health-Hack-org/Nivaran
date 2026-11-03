@@ -574,50 +574,34 @@ export default function DashboardPage() {
       const supabase = getSupabaseBrowserClient();
       let activeUserId: string | null = null;
 
-      // 1. Check for active session in Supabase Auth
+      // 1. Check for active session in Supabase Auth (Strict entry check)
       if (supabase && isSupabaseConfigured()) {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            activeUserId = session.user.id;
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            activeUserId = user.id;
           } else {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-              activeUserId = user.id;
-            }
+            router.push("/auth");
+            return;
           }
         } catch (authErr) {
-          console.warn("Supabase auth session query error:", authErr);
+          console.warn("Supabase auth query error on dashboard mount:", authErr);
+          router.push("/auth");
+          return;
         }
-      }
-
-      // If no Supabase user session, check local storage (guest user or local profile)
-      if (!activeUserId) {
+      } else {
+        // Local mode fallback
         const localUserStr = localStorage.getItem("nivaran_auth_user");
-        const localProfileStr = localStorage.getItem("nivaran_profile");
         if (localUserStr) {
           try {
             const localUser = JSON.parse(localUserStr);
             activeUserId = localUser.id || localUser.user_id;
           } catch {}
         }
-        if (!activeUserId && localProfileStr) {
-          try {
-            const localProf = JSON.parse(localProfileStr);
-            activeUserId = localProf.id;
-          } catch {}
+        if (!activeUserId) {
+          router.push("/auth");
+          return;
         }
-      }
-
-      // If still no user at all, initialize a default guest session so the dashboard ALWAYS opens!
-      if (!activeUserId) {
-        const guestUser = {
-          id: "guest-" + Date.now(),
-          email: "guest@nivaran.app",
-          isGuest: true,
-        };
-        activeUserId = guestUser.id;
-        localStorage.setItem("nivaran_auth_user", JSON.stringify(guestUser));
       }
 
       if (!isSubscribed) return;
@@ -678,6 +662,8 @@ export default function DashboardPage() {
         jf: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
       };
 
+      let hasSupabaseTracks = false;
+
       if (supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
         try {
           const { data: trkRows } = await supabase
@@ -686,6 +672,7 @@ export default function DashboardPage() {
             .eq("user_id", activeUserId);
 
           if (trkRows && trkRows.length > 0) {
+            hasSupabaseTracks = true;
             trkRows.forEach((row: any) => {
               const t = row.track as TrackType;
               if (t in progressMap) {
@@ -703,54 +690,54 @@ export default function DashboardPage() {
                 };
               }
             });
+
+            // Ensure active track matches user's active recovery track
+            if (trkRows[0]?.track && !loadedProfile.active_track) {
+              loadedProfile.active_track = trkRows[0].track as TrackType;
+            }
           }
         } catch (trkErr) {
           console.warn("Error fetching track_progress from Supabase:", trkErr);
         }
       }
 
-      // Fallback to local storage if progress not found in Supabase
-      const savedProgress = localStorage.getItem("nivaran_all_tracks_progress");
-      if (savedProgress) {
-        try {
-          const parsed = JSON.parse(savedProgress);
-          Object.keys(parsed).forEach((k) => {
-            const t = k as TrackType;
-            if (t in progressMap) {
+      // ONLY use localStorage fallback if NO track_progress rows exist in Supabase
+      if (!hasSupabaseTracks) {
+        const savedProgress = localStorage.getItem("nivaran_all_tracks_progress");
+        if (savedProgress) {
+          try {
+            const parsed = JSON.parse(savedProgress);
+            Object.keys(parsed).forEach((k) => {
+              const t = k as TrackType;
+              if (t in progressMap) {
+                progressMap[t] = {
+                  ...progressMap[t],
+                  ...parsed[t],
+                };
+              }
+            });
+          } catch {}
+        }
+
+        const savedSingleProgress = localStorage.getItem("nivaran_track_progress");
+        if (savedSingleProgress) {
+          try {
+            const parsed = JSON.parse(savedSingleProgress);
+            const t = parsed.track as TrackType;
+            if (t && t in progressMap) {
               progressMap[t] = {
                 ...progressMap[t],
-                ...parsed[t],
-                currentDay: Math.max(parsed[t]?.currentDay || 1, progressMap[t].currentDay),
-                streak: Math.max(parsed[t]?.streak ?? 0, progressMap[t].streak),
+                currentDay: parsed.current_day || progressMap[t].currentDay,
+                streak: parsed.streak ?? progressMap[t].streak,
+                shields: parsed.shields ?? progressMap[t].shields,
+                targetDays: parsed.target_days || parsed.targetDays || progressMap[t].targetDays || 28,
+                severityScore: parsed.severity_score !== undefined ? Number(parsed.severity_score) : progressMap[t].severityScore,
+                severityLevel: parsed.severity_level || progressMap[t].severityLevel,
+                surveyResponses: parsed.survey_responses || progressMap[t].surveyResponses,
               };
             }
-          });
-        } catch {}
-      }
-
-      // Also merge single active track progress if stored in nivaran_track_progress
-      const savedSingleProgress = localStorage.getItem("nivaran_track_progress");
-      if (savedSingleProgress) {
-        try {
-          const parsed = JSON.parse(savedSingleProgress);
-          const t = parsed.track as TrackType;
-          if (t && t in progressMap) {
-            progressMap[t] = {
-              ...progressMap[t],
-              currentDay: Math.max(parsed.current_day || 1, progressMap[t].currentDay),
-              streak: Math.max(parsed.streak ?? 0, progressMap[t].streak),
-              shields: parsed.shields ?? progressMap[t].shields,
-              targetDays:
-                parsed.target_days || parsed.targetDays || progressMap[t].targetDays || 28,
-              severityScore:
-                parsed.severity_score !== undefined
-                  ? Number(parsed.severity_score)
-                  : progressMap[t].severityScore,
-              severityLevel: parsed.severity_level || progressMap[t].severityLevel,
-              surveyResponses: parsed.survey_responses || progressMap[t].surveyResponses,
-            };
-          }
-        } catch {}
+          } catch {}
+        }
       }
 
       if (isSubscribed) {

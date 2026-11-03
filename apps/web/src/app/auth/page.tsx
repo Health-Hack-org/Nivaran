@@ -84,8 +84,8 @@ function AuthForm() {
             console.warn("Profile or track check error:", checkErr);
           }
 
-          // Existing user with profile -> Dashboard; otherwise -> Explore
-          if (hasActiveProfile && hasTrackProgress) {
+          // Existing user with active track -> Dashboard; otherwise -> Explore
+          if (hasTrackProgress) {
             router.push("/dashboard");
           } else {
             router.push("/explore");

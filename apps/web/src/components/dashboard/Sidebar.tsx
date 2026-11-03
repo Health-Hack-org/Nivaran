@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import {
   Smartphone,
   Flame,
@@ -12,6 +13,7 @@ import {
   Check,
   RefreshCw,
   AlertTriangle,
+  BookOpen,
 } from "lucide-react";
 import { UserProfile, TrackType, PrescriptionResponse, BiometricInput } from "@/types";
 import { generatePrescription } from "@/lib/api";
@@ -308,6 +310,16 @@ export function Sidebar({
                 <Settings className="w-3.5 h-3.5 text-[#8C6A4F]" />
                 <span>Edit Profile</span>
               </button>
+
+              {/* [📖 About Us & Protocols] Button */}
+              <Link
+                href="/explore"
+                onClick={onClose}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-[#2D221A] bg-white hover:bg-[#F0ECE7] border border-[#EAE5DE] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-98 text-decoration-none"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-[#8C6A4F]" />
+                <span>📖 About Us & Protocols</span>
+              </Link>
             </div>
           ) : (
             /* ======================================================== */

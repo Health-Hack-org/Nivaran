@@ -5,27 +5,46 @@ import Link from "next/link";
 import { BackgroundMandalas } from "@/components/mandala/BackgroundMandalas";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { ArrowRight } from "lucide-react";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function LandingPage() {
-  const [hasProfile, setHasProfile] = useState<boolean>(false);
+  const [enterHref, setEnterHref] = useState<string>("/auth");
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const authUser = localStorage.getItem("nivaran_auth_user");
-      const stored = localStorage.getItem("nivaran_profile");
-      if (authUser && stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed && parsed.username) {
-            setHasProfile(true);
+    async function checkAuthAndTrack() {
+      if (typeof window === "undefined") return;
+      try {
+        const supabase = getSupabaseBrowserClient();
+        if (supabase && isSupabaseConfigured()) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user?.id) {
+            const { data: tracks } = await supabase
+              .from("track_progress")
+              .select("id")
+              .eq("user_id", session.user.id)
+              .limit(1);
+
+            if (tracks && tracks.length > 0) {
+              setEnterHref("/dashboard");
+              return;
+            }
+          }
+        } else {
+          // Local storage fallback for local dev
+          const authUser = localStorage.getItem("nivaran_auth_user");
+          const trackProgress = localStorage.getItem("nivaran_track_progress");
+          if (authUser && trackProgress) {
+            setEnterHref("/dashboard");
             return;
           }
-        } catch {
-          // ignore
         }
+      } catch (err) {
+        console.warn("Auth check on landing:", err);
       }
-      setHasProfile(false);
+      setEnterHref("/auth");
     }
+
+    checkAuthAndTrack();
   }, []);
 
   return (
@@ -44,7 +63,7 @@ export default function LandingPage() {
         {/* Action Buttons: Balanced Primary & Secondary CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
           <Link
-            href="/auth"
+            href={enterHref}
             className="flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-md"
             style={{
               backgroundColor: "#8C6A4F",

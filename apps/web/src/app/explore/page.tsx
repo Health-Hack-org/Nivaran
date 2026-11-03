@@ -84,6 +84,8 @@ export default function ExplorePage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
+  // Conditional dashboard button: only true if authenticated user has active row in track_progress
+  const [hasActiveTrackProgress, setHasActiveTrackProgress] = useState(false);
 
   // Helper: profile fresh check (updated within past 30 days)
   const isProfileFresh = (prof: UserProfile | null): boolean => {
@@ -102,26 +104,46 @@ export default function ExplorePage() {
         const { data } = await supabase.auth.getUser();
         if (data?.user) {
           setCurrentUser(data.user);
-          // Check profile row
-          const { data: prof } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", data.user.id)
-            .single();
 
-          if (prof && prof.height_cm) {
-            setHasExistingProfile(true);
-            setUserProfile(prof);
-            setBioUsername(prof.username || data.user.user_metadata?.username || "Seeker");
-            setBioAge(prof.age || 25);
-            setBioGender(prof.gender || "male");
-            setBioHeightCm(prof.height_cm || 175);
-            setBioWeightKg(prof.weight_kg || 70);
-            setBioActivityLevel(prof.activity_level || "light");
-            setBioDiet(prof.dietary_preference || "vegetarian");
-            setBioMedicalFlags(prof.medical_flags || []);
-            localStorage.setItem("nivaran_profile", JSON.stringify(prof));
+          // Check if active recovery track exists in track_progress
+          try {
+            const { data: trk } = await supabase
+              .from("track_progress")
+              .select("id")
+              .eq("user_id", data.user.id)
+              .limit(1);
+
+            if (trk && trk.length > 0) {
+              setHasActiveTrackProgress(true);
+            } else {
+              setHasActiveTrackProgress(false);
+            }
+          } catch {
+            setHasActiveTrackProgress(false);
           }
+
+          // Check profile row
+          try {
+            const { data: prof } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", data.user.id)
+              .maybeSingle();
+
+            if (prof && prof.height_cm) {
+              setHasExistingProfile(true);
+              setUserProfile(prof);
+              setBioUsername(prof.username || data.user.user_metadata?.username || "Seeker");
+              setBioAge(prof.age || 25);
+              setBioGender(prof.gender || "male");
+              setBioHeightCm(prof.height_cm || 175);
+              setBioWeightKg(prof.weight_kg || 70);
+              setBioActivityLevel(prof.activity_level || "light");
+              setBioDiet(prof.dietary_preference || "vegetarian");
+              setBioMedicalFlags(prof.medical_flags || []);
+              localStorage.setItem("nivaran_profile", JSON.stringify(prof));
+            }
+          } catch {}
           return;
         }
       }
@@ -195,6 +217,11 @@ export default function ExplorePage() {
 
   // Open modal with track
   const handleOpenModal = (trackId?: TrackType) => {
+    // If not authenticated, route to /auth signup first
+    if (!currentUser) {
+      router.push(`/auth?tab=signup${trackId ? `&track=${trackId}` : ""}`);
+      return;
+    }
     if (trackId) setSelectedTrack(trackId);
     setAuthError("");
     setSurveyQuestionIndex(0);
@@ -454,7 +481,32 @@ export default function ExplorePage() {
         console.warn("Prescription fallback:", apiErr);
       }
 
+      // Extra safety: save to daily_prescriptions directly if user is authenticated
+      if (supabase && isSupabaseConfigured() && activeUser?.id && isValidUuid(activeUser.id)) {
+        try {
+          const rxRaw = localStorage.getItem("nivaran_prescription");
+          if (rxRaw) {
+            const parsedRx = JSON.parse(rxRaw);
+            await supabase.from("daily_prescriptions").upsert({
+              user_id: activeUser.id,
+              track: selectedTrack,
+              day_number: 1,
+              phase: parsedRx.phase || 1,
+              special_mission: parsedRx.special_mission,
+              routine_tasks: parsedRx.routine_tasks || [],
+              diet_protocol: parsedRx.diet_protocol,
+              exercise_protocol: parsedRx.exercise_protocol,
+              mental_protocol: parsedRx.mental_protocol,
+              why_this_works: parsedRx.why_this_works,
+            }, { onConflict: "user_id,track,day_number" });
+          }
+        } catch (dbRxErr) {
+          console.warn("Supabase direct rx upsert:", dbRxErr);
+        }
+      }
+
       // 4. Route to dashboard
+      setHasActiveTrackProgress(true);
       setIsModalOpen(false);
       router.push("/dashboard");
     } catch (err: any) {
@@ -594,13 +646,15 @@ export default function ExplorePage() {
           <div className="flex items-center gap-3 flex-shrink-0">
             <ThemeToggle />
 
-            <Link
-              href="/dashboard"
-              className="bg-[#F0ECE7] hover:bg-[#EAE5DE] text-[#2D221A] text-sm font-semibold px-4 py-2 rounded-xl border border-[#EAE5DE] transition-colors inline-flex items-center gap-1.5 h-10"
-            >
-              <span>Dashboard</span>
-              <ArrowRight className="w-3.5 h-3.5 text-[#2D221A]" />
-            </Link>
+            {hasActiveTrackProgress && (
+              <Link
+                href="/dashboard"
+                className="bg-[#F0ECE7] hover:bg-[#EAE5DE] text-[#2D221A] text-sm font-semibold px-4 py-2 rounded-xl border border-[#EAE5DE] transition-colors inline-flex items-center gap-1.5 h-10"
+              >
+                <span>Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5 text-[#2D221A]" />
+              </Link>
+            )}
 
             <SpecularButton
               size="md"

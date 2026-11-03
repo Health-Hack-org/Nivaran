@@ -604,19 +604,44 @@ def generate_daily_prescription(biometrics: BiometricInput) -> PrescriptionRespo
                 if score >= 2:
                     high_triggers.append(f"- Weak Spot: '{q_text}' (User selected: {ans_lbl}, score {score}/3)")
 
+    target_days_int = int(target_days) if target_days else 28
+    day_pct = (effective_day / max(target_days_int, 1)) * 100.0
+
+    if day_pct <= 25.0:
+        progressive_stage = f"EARLY STAGE (Day 1 to 25% of {target_days_int} Days)"
+        progressive_scaling_directive = (
+            f"PROGRESSIVE SCALING DIRECTIVE [EARLY DAYS - Day {effective_day}/{target_days_int} ({day_pct:.0f}%)]: "
+            "Start slow and achievable. Focus on gentle friction, environment setup, basic hydration, and trigger observation "
+            "without overwhelming willpower. Do NOT overwhelm with high-cognitive or stressful tasks."
+        )
+    elif day_pct <= 70.0:
+        progressive_stage = f"MIDDLE STAGE (26% to 70% of {target_days_int} Days)"
+        progressive_scaling_directive = (
+            f"PROGRESSIVE SCALING DIRECTIVE [MIDDLE DAYS - Day {effective_day}/{target_days_int} ({day_pct:.0f}%)]: "
+            "Progressively increase task challenge. Introduce strict time-blocking, dopamine replacement activities targeting "
+            "their highest-scoring survey triggers, and deeper physical movement."
+        )
+    else:
+        progressive_stage = f"FINAL STAGE (71% to 100% of {target_days_int} Days)"
+        progressive_scaling_directive = (
+            f"PROGRESSIVE SCALING DIRECTIVE [FINAL DAYS - Day {effective_day}/{target_days_int} ({day_pct:.0f}%)]: "
+            "Focus on long-term relapse prevention, high-stress inoculation, and permanent identity consolidation "
+            f"so the user is fully recovered by Day {target_days_int}."
+        )
+
     if severity_level == "minor":
         intensity_guidance = (
-            f"DIAGNOSTIC PROTOCOL: MINOR DEPENDENCY ({target_days}-Day Rapid Reset, Severity Score: {severity_score}/10).\n"
+            f"DIAGNOSTIC PROTOCOL: MINOR DEPENDENCY ({target_days_int}-Day Rapid Reset, Severity Score: {severity_score}/10).\n"
             "Focus on boundary setting, mindful replacement habits, and environment friction tweaks rather than extreme cold-turkey isolation."
         )
     elif severity_level == "severe":
         intensity_guidance = (
-            f"DIAGNOSTIC PROTOCOL: SEVERE DEPENDENCY ({target_days}-Day Deep Stabilization & Tapering, Severity Score: {severity_score}/10).\n"
+            f"DIAGNOSTIC PROTOCOL: SEVERE DEPENDENCY ({target_days_int}-Day Deep Stabilization & Tapering, Severity Score: {severity_score}/10).\n"
             "Focus on acute withdrawal management, high-friction physical barriers, nervous system down-regulation, and gradual tapering."
         )
     else:
         intensity_guidance = (
-            f"DIAGNOSTIC PROTOCOL: MODERATE COMPULSIVE LOOP ({target_days}-Day Neuroplastic Rewiring, Severity Score: {severity_score}/10).\n"
+            f"DIAGNOSTIC PROTOCOL: MODERATE COMPULSIVE LOOP ({target_days_int}-Day Neuroplastic Rewiring, Severity Score: {severity_score}/10).\n"
             "Focus on dopamine scheduling, trigger interruption, and structured time-blocking."
         )
 
@@ -640,8 +665,12 @@ def generate_daily_prescription(biometrics: BiometricInput) -> PrescriptionRespo
         client = genai.Client(api_key=api_key, http_options=http_opts) if http_opts else genai.Client(api_key=api_key)
 
         prompt = f"""
-You are the Chief Clinical Officer of NIVARAN, a medical-grade mind-growth and recovery AI platform.
-Generate a comprehensive, scientifically rigorous daily prescription for this user based on their exact metrics, diagnostic assessment, recovery timeline, clinical guardrails, and urge history.
+SYSTEM CONTEXT: You are the NIVARAN Clinical Addiction Recovery & Metabolic Engine.
+Your clinical mission is to guide the user to complete addiction recovery over their exact target timeline of {target_days_int} days (14, 21, 35, or 54 days) based on their severity_score ({severity_score}/10), survey_responses, and biometrics (height {biometrics.height_cm}cm, weight {biometrics.weight_kg}kg, age {biometrics.age}, gender {biometrics.gender}, diet {biometrics.dietary_preference}, medical flags {biometrics.medical_flags}).
+
+STAGE & PROGRESSIVE DIRECTIVE:
+Recovery Stage: {progressive_stage}
+{progressive_scaling_directive}
 
 USER CLINICAL & DIAGNOSTIC PROFILE:
 - Username: {biometrics.username or 'Seeker'}
