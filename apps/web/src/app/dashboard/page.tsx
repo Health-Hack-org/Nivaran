@@ -16,6 +16,7 @@ import {
 import { SpringCheck } from "@/components/ui/SpringCheck";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { UrgeSOSModal } from "@/components/dashboard/UrgeSOSModal";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 import {
   UserProfile,
@@ -965,14 +966,18 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {/* Right: [🚨 SOS] emergency craving button */}
-          <button
-            onClick={() => setIsSOSOpen(true)}
-            className="bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-3.5 py-2 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all flex-shrink-0"
-          >
-            <AlertTriangle className="w-4 h-4 text-rose-700" />
-            <span>SOS</span>
-          </button>
+          {/* Right: [☀️/🌙 ThemeToggle] & [🚨 SOS] emergency craving button */}
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            <ThemeToggle />
+
+            <button
+              onClick={() => setIsSOSOpen(true)}
+              className="bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-3.5 py-2 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all flex-shrink-0"
+            >
+              <AlertTriangle className="w-4 h-4 text-rose-700" />
+              <span>SOS</span>
+            </button>
+          </div>
         </header>
 
         {/* Soft 30-Day Biometric Calibration Prompt */}

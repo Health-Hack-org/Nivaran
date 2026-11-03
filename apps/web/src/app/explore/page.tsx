@@ -42,6 +42,7 @@ import {
 import { generatePrescription } from "@/lib/api";
 import Stepper, { Step } from "@/components/ui/Stepper";
 import SpecularButton from "@/components/ui/SpecularButton";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const navLinks = [
   { id: "about", label: "About" },
@@ -560,8 +561,10 @@ export default function ExplorePage() {
             })}
           </nav>
 
-          {/* Right Buttons: [Dashboard] & [Get Started] */}
+          {/* Right Buttons: [ThemeToggle] & [Dashboard] & [Get Started] */}
           <div className="flex items-center gap-3 flex-shrink-0">
+            <ThemeToggle />
+
             <Link
               href="/dashboard"
               className="bg-[#F0ECE7] hover:bg-[#EAE5DE] text-[#2D221A] text-sm font-semibold px-4 py-2 rounded-xl border border-[#EAE5DE] transition-colors inline-flex items-center gap-1.5 h-10"
@@ -840,7 +843,6 @@ export default function ExplorePage() {
           {/* Modal Container */}
           <div
             className="relative bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 border border-[#E8EEE7] shadow-[0_4px_16px_rgba(53,41,31,0.08)] z-50 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200"
-            style={{ backgroundColor: "#FFFFFF" }}
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#E8EEE7]">
@@ -1151,11 +1153,11 @@ export default function ExplorePage() {
                         </div>
 
                         {/* Question Box */}
-                        <div className="p-4 rounded-2xl bg-[#F8F7F4] border border-[#EAE5DE] space-y-1">
-                          <span className="text-[10px] font-bold text-[#8C6A4F] uppercase tracking-wider block">
+                        <div className="p-4 rounded-2xl bg-[#F8F7F4] dark:bg-[#1E1915] border border-[#EAE5DE] dark:border-white/10 space-y-1">
+                          <span className="text-[10px] font-bold text-[#8C6A4F] dark:text-[#E2BA91] uppercase tracking-wider block">
                             Trigger Dimension: {currentQ?.triggerCategory}
                           </span>
-                          <h4 className="text-sm sm:text-base font-bold text-[#2D221A] leading-snug">
+                          <h4 className="text-sm sm:text-base font-bold text-[#2D221A] dark:text-white leading-snug">
                             {currentQ?.question}
                           </h4>
                         </div>
@@ -1171,23 +1173,23 @@ export default function ExplorePage() {
                                 onClick={() => handleSelectSurveyOption(opt.score)}
                                 className={`p-3.5 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 select-none active:scale-[0.99] ${isChosen
                                     ? "border-[#8C6A4F] bg-[#8C6A4F]/10 shadow-xs ring-1 ring-[#8C6A4F]"
-                                    : "border-[#EAE5DE] bg-white hover:border-[#8C6A4F]/50 hover:bg-[#FAF8F5]"
+                                    : "border-[#EAE5DE] dark:border-white/10 bg-white dark:bg-[#26201B] hover:border-[#8C6A4F]/50 hover:bg-[#FAF8F5] dark:hover:bg-[#302720]"
                                   }`}
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="font-bold text-xs text-[#2D221A]">
+                                  <span className="font-bold text-xs text-[#2D221A] dark:text-white">
                                     {opt.label}
                                   </span>
                                   <span
                                     className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isChosen
                                         ? "bg-[#8C6A4F] text-white"
-                                        : "bg-[#F0ECE7] text-[#6E5D52]"
+                                        : "bg-[#F0ECE7] dark:bg-[#1A1512] text-[#6E5D52] dark:text-[#DDD4CA]"
                                       }`}
                                   >
                                     {opt.score} {opt.score === 1 ? "pt" : "pts"}
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-[#6E5D52] leading-tight">
+                                <p className="text-[11px] text-[#6E5D52] dark:text-[#DDD4CA] leading-tight">
                                   {opt.description}
                                 </p>
                               </button>
@@ -1251,22 +1253,22 @@ export default function ExplorePage() {
                   {diagnosticResult ? (
                     <div className="py-2 space-y-4">
                       {/* Report Hero Card */}
-                      <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#EAE5DE] space-y-4">
-                        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[#EAE5DE] pb-3">
+                      <div className="p-5 rounded-2xl bg-[#FAF8F5] dark:bg-[#1E1915] border border-[#EAE5DE] dark:border-white/10 space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[#EAE5DE] dark:border-white/10 pb-3">
                           <div>
-                            <span className="text-[10px] font-bold text-[#8C6A4F] uppercase tracking-wider block">
+                            <span className="text-[10px] font-bold text-[#8C6A4F] dark:text-[#E2BA91] uppercase tracking-wider block">
                               Assessment Complete · {tracks.find((t) => t.id === selectedTrack)?.title}
                             </span>
-                            <h4 className="text-base sm:text-lg font-bold text-[#2D221A]">
+                            <h4 className="text-base sm:text-lg font-bold text-[#2D221A] dark:text-white">
                               Clinical Diagnostic Summary
                             </h4>
                           </div>
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-bold border ${diagnosticResult.severityLevel === "minor"
-                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40"
                                 : diagnosticResult.severityLevel === "severe"
-                                  ? "bg-rose-50 text-rose-800 border-rose-200"
-                                  : "bg-amber-50 text-amber-800 border-amber-200"
+                                  ? "bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800/40"
+                                  : "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/40"
                               }`}
                           >
                             {diagnosticResult.classificationTitle}
@@ -1275,35 +1277,35 @@ export default function ExplorePage() {
 
                         {/* Severity Gauge & Protocol Duration */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="p-4 rounded-xl bg-white border border-[#EAE5DE] flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-2xl bg-[#8C6A4F]/10 border border-[#8C6A4F]/20 flex flex-col items-center justify-center flex-shrink-0">
-                              <span className="text-lg font-black text-[#8C6A4F]">
+                          <div className="p-4 rounded-xl bg-white dark:bg-[#26201B] border border-[#EAE5DE] dark:border-white/10 flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-2xl bg-[#8C6A4F]/10 dark:bg-[#8C6A4F]/20 border border-[#8C6A4F]/20 dark:border-[#8C6A4F]/40 flex flex-col items-center justify-center flex-shrink-0">
+                              <span className="text-lg font-black text-[#8C6A4F] dark:text-[#E2BA91]">
                                 {diagnosticResult.severityScore}
                               </span>
-                              <span className="text-[9px] font-semibold text-[#6E5D52]">/ 10.0</span>
+                              <span className="text-[9px] font-semibold text-[#6E5D52] dark:text-[#DDD4CA]">/ 10.0</span>
                             </div>
                             <div>
-                              <span className="text-xs font-bold text-[#2D221A] block">
+                              <span className="text-xs font-bold text-[#2D221A] dark:text-white block">
                                 Normalized Severity
                               </span>
-                              <p className="text-[11px] text-[#6E5D52] leading-tight mt-0.5">
+                              <p className="text-[11px] text-[#6E5D52] dark:text-[#DDD4CA] leading-tight mt-0.5">
                                 Calculated across 10 behavioral dimensions (Raw Score: {diagnosticResult.rawScore}/30)
                               </p>
                             </div>
                           </div>
 
-                          <div className="p-4 rounded-xl bg-white border border-[#EAE5DE] flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-2xl bg-[#2D221A] text-white flex flex-col items-center justify-center flex-shrink-0">
+                          <div className="p-4 rounded-xl bg-white dark:bg-[#26201B] border border-[#EAE5DE] dark:border-white/10 flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-2xl bg-[#2D221A] dark:bg-[#1A1512] border dark:border-white/10 text-white flex flex-col items-center justify-center flex-shrink-0">
                               <span className="text-xl font-black text-[#F8F7F4]">
                                 {diagnosticResult.targetDays}
                               </span>
                               <span className="text-[9px] font-bold text-[#F8F7F4]/70">DAYS</span>
                             </div>
                             <div>
-                              <span className="text-xs font-bold text-[#2D221A] block">
+                              <span className="text-xs font-bold text-[#2D221A] dark:text-white block">
                                 {diagnosticResult.timelineName}
                               </span>
-                              <p className="text-[11px] text-[#6E5D52] leading-tight mt-0.5">
+                              <p className="text-[11px] text-[#6E5D52] dark:text-[#DDD4CA] leading-tight mt-0.5">
                                 Scientifically calibrated duration to rewire neural craving loops and restore dopamine.
                               </p>
                             </div>
@@ -1312,24 +1314,24 @@ export default function ExplorePage() {
 
                         {/* Top Vulnerability / Trigger Areas */}
                         <div className="space-y-2">
-                          <span className="text-[11px] font-bold text-[#2D221A] block uppercase tracking-wider">
+                          <span className="text-[11px] font-bold text-[#2D221A] dark:text-white block uppercase tracking-wider">
                             High-Friction Diagnostic Weak Spots ({diagnosticResult.topTriggers.length})
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             {diagnosticResult.topTriggers.map((trig, idx) => (
                               <div
                                 key={idx}
-                                className="p-3 rounded-xl bg-white border border-[#EAE5DE] text-left space-y-1"
+                                className="p-3 rounded-xl bg-white dark:bg-[#26201B] border border-[#EAE5DE] dark:border-white/10 text-left space-y-1"
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="text-[10px] font-bold text-[#8C6A4F] uppercase">
+                                  <span className="text-[10px] font-bold text-[#8C6A4F] dark:text-[#E2BA91] uppercase">
                                     {trig.dimension}
                                   </span>
-                                  <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                  <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-800/40">
                                     {trig.score}/3 pts
                                   </span>
                                 </div>
-                                <p className="text-[11px] font-semibold text-[#2D221A] line-clamp-2">
+                                <p className="text-[11px] font-semibold text-[#2D221A] dark:text-[#FAF6F0] line-clamp-2">
                                   {trig.triggerCategory}
                                 </p>
                               </div>
@@ -1346,7 +1348,7 @@ export default function ExplorePage() {
                             setSurveyQuestionIndex(9);
                             setModalStep(3);
                           }}
-                          className="px-4 py-2.5 rounded-xl border border-[#EAE5DE] text-[#2D221A] text-xs font-semibold hover:bg-[#F0ECE7]/50 transition-colors cursor-pointer"
+                          className="px-4 py-2.5 rounded-xl border border-[#EAE5DE] dark:border-white/15 text-[#2D221A] dark:text-white text-xs font-semibold hover:bg-[#F0ECE7]/50 dark:hover:bg-white/10 transition-colors cursor-pointer"
                         >
                           ← Review Survey
                         </button>

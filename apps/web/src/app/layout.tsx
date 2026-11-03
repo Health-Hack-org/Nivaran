@@ -12,8 +12,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-[#F8F7F4] text-[#2D221A] antialiased selection:bg-[#8C6A4F]/20 selection:text-[#8C6A4F]">
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-screen antialiased" suppressHydrationWarning>
+        {/* Instant inline theme initialization before paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem('nivaran_theme');
+                  var isDark = saved ? saved === 'dark' : true;
+                  if (isDark) {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.remove('light');
+                  } else {
+                    document.documentElement.classList.add('light');
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         {children}
       </body>
     </html>

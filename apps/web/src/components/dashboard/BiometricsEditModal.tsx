@@ -1,147 +1,128 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
   X,
-  Activity,
-  HeartPulse,
   Scale,
   Ruler,
+  Activity,
   Salad,
-  Sparkles,
   ShieldAlert,
-  Save,
+  Sparkles,
   AlertCircle,
+  HeartPulse,
 } from "lucide-react";
+import { UserProfile, ActivityLevel, Gender, BiometricInput } from "@/types";
 import {
-  UserProfile,
-  TrackType,
-  ActivityLevel,
-  Gender,
-  PrescriptionResponse,
-  BiometricInput,
-} from "@/types";
-import { recalculateProfilePrescription } from "@/lib/api";
+  getSupabaseBrowserClient,
+  isSupabaseConfigured,
+  isValidUuid,
+  sanitizeProfileForDb,
+} from "@/lib/supabase/client";
+import { generatePrescription } from "@/lib/api";
 
 interface BiometricsEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  profile: UserProfile;
-  currentTrack: TrackType;
-  currentDay: number;
-  onProfileUpdated: (updatedProfile: UserProfile, newPrescription: PrescriptionResponse) => void;
+  currentProfile: UserProfile;
+  onProfileUpdated?: (updated: UserProfile) => void;
 }
 
 export function BiometricsEditModal({
   isOpen,
   onClose,
-  profile,
-  currentTrack,
-  currentDay,
+  currentProfile,
   onProfileUpdated,
 }: BiometricsEditModalProps) {
-  const [weightKg, setWeightKg] = useState<number>(profile.weight_kg || 70);
-  const [heightCm, setHeightCm] = useState<number>(profile.height_cm || 175);
+  const [weightKg, setWeightKg] = useState<number>(currentProfile.weight_kg || 70);
+  const [heightCm, setHeightCm] = useState<number>(currentProfile.height_cm || 175);
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>(
-    profile.activity_level || "light"
+    currentProfile.activity_level || "light"
   );
   const [dietaryPreference, setDietaryPreference] = useState<string>(
-    profile.dietary_preference || "vegetarian"
+    currentProfile.dietary_preference || "vegetarian"
   );
   const [medicalFlags, setMedicalFlags] = useState<string[]>(
-    profile.medical_flags || []
+    currentProfile.medical_flags || []
   );
   const [medicalNotes, setMedicalNotes] = useState<string>(
-    profile.medical_notes || ""
+    currentProfile.medical_notes || ""
   );
-
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Live BMI preview
-  const liveBmi = useMemo(() => {
-    if (!heightCm || !weightKg || heightCm <= 0) return null;
-    const heightM = heightCm / 100;
-    const bmiVal = Number((weightKg / (heightM * heightM)).toFixed(1));
-    let cat = "Normal";
-    let color = "#137333";
-    let bg = "#e6f4ea";
-
-    if (bmiVal < 18.5) {
-      cat = "Underweight";
-      color = "#1a73e8";
-      bg = "#e8f0fe";
-    } else if (bmiVal <= 24.9) {
-      cat = "Normal Healthy";
-      color = "#137333";
-      bg = "#e6f4ea";
-    } else if (bmiVal <= 29.9) {
-      cat = "Overweight";
-      color = "#b06000";
-      bg = "#fef7e0";
-    } else {
-      cat = "Obese";
-      color = "#c5221f";
-      bg = "#fce8e6";
-    }
-    return { bmiVal, cat, color, bg };
-  }, [heightCm, weightKg]);
+  if (!isOpen) return null;
 
   const medicalConditionList = [
     {
-      id: "asthma",
-      label: "🫁 Asthma / Respiratory",
-      guardrail: "Caps cardio intensity & enforces nasal diaphragmatic pacing",
-    },
-    {
       id: "hypertension",
-      label: "🫀 High Blood Pressure",
-      guardrail: "Restricts to Zone 2 walking (<120 bpm), removes added sodium & papads",
+      label: "Hypertension / High Blood Pressure",
+      guardrail: "Caps max heart rate at Zone 2. Strict avoidance of high-intensity intervals.",
     },
     {
-      id: "joint_pain",
-      label: "🦵 Knee / Joint / Back Pain",
-      guardrail: "Replaces impact exercises with seated mobility & gentle walks",
+      id: "type_2_diabetes",
+      label: "Type 2 Diabetes / Insulin Resistance",
+      guardrail: "Zero prolonged fasting. Steady-glucose carbohydrate distribution.",
     },
     {
-      id: "diabetes",
-      label: "🩸 Diabetes / Blood Sugar",
-      guardrail: "Enforces low-GI whole grains, high dietary fiber, and zero refined sugars",
+      id: "asthma",
+      label: "Asthma / Respiratory Sensitivity",
+      guardrail: "Nasal-only steady pacing. No breath-holding breathwork.",
     },
     {
-      id: "lactose_intolerance",
-      label: "🥛 Lactose Intolerance / Dairy Free",
-      guardrail: "Strips milk/paneer/curd; substitutes with organic tofu, lentils, and seeds",
+      id: "knee_joint_pain",
+      label: "Joint / Knee / Lower Back Pain",
+      guardrail: "Zero-impact workouts. Replaces running with kinetic low-impact walking.",
     },
     {
-      id: "insomnia",
-      label: "🌙 Sleep Disruption / Insomnia",
-      guardrail: "Imposes strict 9:00 PM digital sunset and binaural delta-wave therapy",
-    },
-    {
-      id: "anxiety",
-      label: "🧘 High Stress / Anxiety Triggers",
-      guardrail: "Pairs urge waves with physiological sighs and autonomic box-breathing",
+      id: "gerd_acid_reflux",
+      label: "GERD / Severe Acid Reflux",
+      guardrail: "Mandatory 3-hour pre-sleep dinner cutoff. Zero late-night eating.",
     },
   ];
 
-  const toggleFlag = (flagKey: string) => {
-    setMedicalFlags((prev) =>
-      prev.includes(flagKey) ? prev.filter((f) => f !== flagKey) : [...prev, flagKey]
-    );
+  const toggleFlag = (id: string) => {
+    if (medicalFlags.includes(id)) {
+      setMedicalFlags(medicalFlags.filter((f) => f !== id));
+    } else {
+      setMedicalFlags([...medicalFlags, id]);
+    }
   };
 
-  if (!isOpen) return null;
+  const computeLiveBmi = (w: number, h: number) => {
+    if (!w || !h) return null;
+    const hM = h / 100;
+    const val = w / (hM * hM);
+    let cat = "Normal";
+    let color = "#16a34a";
+    let bg = "#dcfce7";
+    if (val < 18.5) {
+      cat = "Underweight";
+      color = "#ca8a04";
+      bg = "#fef9c3";
+    } else if (val >= 25 && val < 30) {
+      cat = "Overweight";
+      color = "#ea580c";
+      bg = "#ffedd5";
+    } else if (val >= 30) {
+      cat = "Obese";
+      color = "#dc2626";
+      bg = "#fee2e2";
+    }
+    return { bmiVal: val.toFixed(1), cat, color, bg };
+  };
+
+  const liveBmi = computeLiveBmi(weightKg, heightCm);
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setErrorMsg("");
+    setErrorMsg(null);
 
     const updatedProfile: UserProfile = {
-      ...profile,
-      weight_kg: Number(weightKg),
-      height_cm: Number(heightCm),
+      ...currentProfile,
+      weight_kg: weightKg,
+      height_cm: heightCm,
       activity_level: activityLevel,
       dietary_preference: dietaryPreference,
       medical_flags: medicalFlags,
@@ -149,32 +130,53 @@ export function BiometricsEditModal({
       updated_at: new Date().toISOString(),
     };
 
-    const payload: BiometricInput = {
-      user_id: profile.id,
-      username: profile.username,
-      age: profile.age,
-      gender: profile.gender,
-      height_cm: Number(heightCm),
-      weight_kg: Number(weightKg),
-      activity_level: activityLevel,
-      track: currentTrack,
-      day_number: currentDay,
-      medical_flags: medicalFlags,
-      medical_notes: medicalNotes,
-      dietary_preference: dietaryPreference,
-      recent_urge_triggers: [],
-    };
-
     try {
-      const refreshedPrescription = await recalculateProfilePrescription(payload);
-      onProfileUpdated(updatedProfile, refreshedPrescription);
+      // 1. Save to Supabase if authenticated
+      const supabase = getSupabaseBrowserClient();
+      if (supabase && isSupabaseConfigured() && isValidUuid(currentProfile.id)) {
+        const payload = sanitizeProfileForDb(updatedProfile);
+        const { error } = await supabase
+          .from("user_profiles")
+          .update(payload)
+          .eq("id", currentProfile.id);
+
+        if (error) {
+          console.warn("Could not update profile in Supabase:", error.message);
+        }
+      }
+
+      // 2. Save locally
+      try {
+        localStorage.setItem("user_profile", JSON.stringify(updatedProfile));
+      } catch (err) {}
+
+      // 3. Re-trigger prescription recalculation
+      const bioPayload: BiometricInput = {
+        user_id: updatedProfile.id || "local-user",
+        username: updatedProfile.username || "Seeker",
+        age: updatedProfile.age || 25,
+        gender: (updatedProfile.gender as Gender) || "male",
+        height_cm: heightCm,
+        weight_kg: weightKg,
+        activity_level: activityLevel,
+        track: updatedProfile.active_track || "sm",
+        dietary_preference: dietaryPreference,
+        medical_flags: medicalFlags,
+        medical_notes: medicalNotes,
+      };
+
+      try {
+        await generatePrescription(bioPayload);
+      } catch (genErr) {
+        console.warn("Prescription regeneration fallback:", genErr);
+      }
+
+      if (onProfileUpdated) {
+        onProfileUpdated(updatedProfile);
+      }
       onClose();
     } catch (err: any) {
-      console.error("Failed to recalculate profile prescription:", err);
-      setErrorMsg(
-        err.message ||
-          "Could not recalculate via FastAPI server. Please check your network or try again."
-      );
+      setErrorMsg(err.message || "Failed to update clinical profile.");
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +184,7 @@ export function BiometricsEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl bg-[#FFFDF9] rounded-3xl border border-[#66350F]/20 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-xl bg-modal text-modal-foreground rounded-3xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="bg-[#66350F] px-6 py-4 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -198,7 +200,7 @@ export function BiometricsEditModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-white/20 transition-colors text-white"
+            className="p-2 rounded-full hover:bg-white/20 transition-colors text-white cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -208,7 +210,7 @@ export function BiometricsEditModal({
         {/* Content Form */}
         <form onSubmit={handleUpdate} className="p-6 overflow-y-auto space-y-5">
           {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs rounded-xl flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{errorMsg}</span>
             </div>
@@ -217,8 +219,8 @@ export function BiometricsEditModal({
           {/* Biometrics Row */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-[#2A1503] mb-1 flex items-center gap-1.5">
-                <Scale className="w-3.5 h-3.5 text-[#66350F]" />
+              <label className="block text-xs font-bold text-foreground mb-1 flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-secondary" />
                 Weight (kg)
               </label>
               <input
@@ -229,13 +231,13 @@ export function BiometricsEditModal({
                 value={weightKg}
                 onChange={(e) => setWeightKg(Number(e.target.value))}
                 required
-                className="w-full px-3 py-2 rounded-xl border border-[#66350F]/20 bg-white text-sm font-semibold text-[#2A1503] outline-none focus:border-[#66350F]"
+                className="w-full px-3 py-2 rounded-xl border border-input bg-card text-card-foreground text-sm font-semibold outline-none focus:border-secondary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#2A1503] mb-1 flex items-center gap-1.5">
-                <Ruler className="w-3.5 h-3.5 text-[#66350F]" />
+              <label className="block text-xs font-bold text-foreground mb-1 flex items-center gap-1.5">
+                <Ruler className="w-3.5 h-3.5 text-secondary" />
                 Height (cm)
               </label>
               <input
@@ -246,7 +248,7 @@ export function BiometricsEditModal({
                 value={heightCm}
                 onChange={(e) => setHeightCm(Number(e.target.value))}
                 required
-                className="w-full px-3 py-2 rounded-xl border border-[#66350F]/20 bg-white text-sm font-semibold text-[#2A1503] outline-none focus:border-[#66350F]"
+                className="w-full px-3 py-2 rounded-xl border border-input bg-card text-card-foreground text-sm font-semibold outline-none focus:border-secondary"
               />
             </div>
           </div>
@@ -271,14 +273,14 @@ export function BiometricsEditModal({
           {/* Activity Level & Dietary Preference */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-[#2A1503] mb-1 flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-[#66350F]" />
+              <label className="block text-xs font-bold text-foreground mb-1 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-secondary" />
                 Activity Level
               </label>
               <select
                 value={activityLevel}
                 onChange={(e) => setActivityLevel(e.target.value as ActivityLevel)}
-                className="w-full px-3 py-2 rounded-xl border border-[#66350F]/20 bg-white text-xs font-semibold text-[#2A1503] outline-none focus:border-[#66350F]"
+                className="w-full px-3 py-2 rounded-xl border border-input bg-card text-card-foreground text-xs font-semibold outline-none focus:border-secondary"
               >
                 <option value="sedentary">Sedentary (desk work)</option>
                 <option value="light">Light (gentle daily walks)</option>
@@ -288,14 +290,14 @@ export function BiometricsEditModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#2A1503] mb-1 flex items-center gap-1.5">
-                <Salad className="w-3.5 h-3.5 text-[#66350F]" />
+              <label className="block text-xs font-bold text-foreground mb-1 flex items-center gap-1.5">
+                <Salad className="w-3.5 h-3.5 text-secondary" />
                 Dietary Preference
               </label>
               <select
                 value={dietaryPreference}
                 onChange={(e) => setDietaryPreference(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-[#66350F]/20 bg-white text-xs font-semibold text-[#2A1503] outline-none focus:border-[#66350F]"
+                className="w-full px-3 py-2 rounded-xl border border-input bg-card text-card-foreground text-xs font-semibold outline-none focus:border-secondary"
               >
                 <option value="vegetarian">Vegetarian</option>
                 <option value="non_vegetarian">Non-Vegetarian</option>
@@ -307,8 +309,8 @@ export function BiometricsEditModal({
 
           {/* Medical Flags */}
           <div>
-            <label className="block text-xs font-bold text-[#2A1503] mb-2 flex items-center gap-1.5">
-              <ShieldAlert className="w-3.5 h-3.5 text-[#66350F]" />
+            <label className="block text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-secondary" />
               Active Medical Guardrails
             </label>
             <div className="space-y-2">
@@ -319,26 +321,26 @@ export function BiometricsEditModal({
                     type="button"
                     key={cond.id}
                     onClick={() => toggleFlag(cond.id)}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-all text-xs flex items-center justify-between ${
+                    className={`w-full text-left p-2.5 rounded-xl border transition-all text-xs flex items-center justify-between cursor-pointer ${
                       active
-                        ? "bg-[#66350F]/10 border-[#66350F] text-[#2A1503]"
-                        : "bg-white border-[#66350F]/15 text-[#2A1503]/70 hover:bg-[#F5F5DC]"
+                        ? "bg-secondary/15 border-secondary text-foreground font-semibold"
+                        : "bg-card border-border text-foreground-muted hover:bg-muted"
                     }`}
                   >
                     <div>
-                      <div className="font-bold flex items-center gap-1.5">
+                      <div className="font-bold flex items-center gap-1.5 text-foreground">
                         <span
                           className={`w-2 h-2 rounded-full ${
-                            active ? "bg-[#66350F]" : "bg-gray-300"
+                            active ? "bg-secondary" : "bg-foreground-muted/40"
                           }`}
                         />
                         {cond.label}
                       </div>
-                      <div className="text-[10px] text-[#2A1503]/60 pl-3.5 mt-0.5">
+                      <div className="text-[10px] text-foreground-muted pl-3.5 mt-0.5">
                         {cond.guardrail}
                       </div>
                     </div>
-                    <span className="text-xs font-black ml-2">
+                    <span className="text-xs font-black ml-2 text-foreground">
                       {active ? "ON" : "OFF"}
                     </span>
                   </button>
@@ -349,7 +351,7 @@ export function BiometricsEditModal({
 
           {/* Additional Notes */}
           <div>
-            <label className="block text-xs font-bold text-[#2A1503] mb-1">
+            <label className="block text-xs font-bold text-foreground mb-1">
               Additional Medical Notes / Constraints
             </label>
             <textarea
@@ -357,7 +359,7 @@ export function BiometricsEditModal({
               value={medicalNotes}
               onChange={(e) => setMedicalNotes(e.target.value)}
               placeholder="e.g., occasional lower back soreness, acid reflux when eating late..."
-              className="w-full p-2.5 rounded-xl border border-[#66350F]/20 bg-white text-xs text-[#2A1503] outline-none focus:border-[#66350F]"
+              className="w-full p-2.5 rounded-xl border border-input bg-card text-card-foreground text-xs outline-none focus:border-secondary"
             />
           </div>
 
@@ -366,7 +368,7 @@ export function BiometricsEditModal({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 rounded-xl bg-[#66350F] hover:bg-[#4a260a] text-white font-bold text-sm shadow transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-secondary hover:bg-secondary/90 text-secondary-foreground font-bold text-sm shadow transition-colors flex items-center justify-center gap-2 cursor-pointer"
             >
               {isLoading ? (
                 <>

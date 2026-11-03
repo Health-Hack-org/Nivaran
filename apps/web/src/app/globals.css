@@ -2,17 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
+
+/* ========================================================
+   NIVARAN DESIGN SYSTEM SEMANTIC TOKENS
+   ======================================================== */
 :root {
+  /* Surfaces & Canvas */
+  --background: #F8F7F4;
   --canvas: #F8F7F4;
   --card: #FFFFFF;
+  --card-foreground: #2D221A;
+  --card-elevated: #F0ECE7;
+  --popover: #FFFFFF;
+  --popover-foreground: #2D221A;
+
+  /* Typography / Foreground */
+  --foreground: #2D221A;
+  --foreground-muted: #6E5D52;
+  --foreground-faint: #8C7B70;
+
+  /* Brand / Action */
+  --primary: #8C6A4F;
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #73543B;
+
+  --secondary: #66350F;
+  --secondary-foreground: #FFFFFF;
+  --secondary-hover: #4A260A;
+
+  /* Inset / Neutral */
+  --muted: #F0ECE7;
+  --muted-foreground: #6E5D52;
+
+  /* Accent */
+  --accent: #F5F2EB;
+  --accent-foreground: #2D221A;
+
+  /* Borders & Inputs */
   --border: #EAE5DE;
-  --primary: #2D221A;
-  --muted: #6E5D52;
-  --accent: #8C6A4F;
-  --accent-hover: #73543B;
+  --input: #EAE5DE;
+  --ring: #8C6A4F;
+
+  /* Status / Feedback */
+  --destructive: #962D2D;
+  --destructive-foreground: #FFFFFF;
+  --danger: #962D2D;
+  --shield: #1CB0F6;
   --tag: #F0ECE7;
-  --shield: #1cb0f6;
-  --danger: #962d2d;
+
+  /* Modal / Dialogue */
+  --modal: #FFFDF9;
+  --modal-foreground: #2D221A;
+
+  /* Mandala & Visual Art */
+  --mandala-stroke: #2A1503;
+}
+
+html.dark {
+  /* Surfaces & Canvas */
+  --background: #161310;
+  --canvas: #161310;
+  --card: #221C17;
+  --card-foreground: #F5EFEB;
+  --card-elevated: #2B231D;
+  --popover: #221C17;
+  --popover-foreground: #F5EFEB;
+
+  /* Typography / Foreground */
+  --foreground: #F5EFEB;
+  --foreground-muted: #DDD4CA;
+  --foreground-faint: #A8988B;
+
+  /* Brand / Action */
+  --primary: #C69A70;
+  --primary-foreground: #161310;
+  --primary-hover: #D8AA80;
+
+  --secondary: #D8AA80;
+  --secondary-foreground: #161310;
+  --secondary-hover: #E2BA91;
+
+  /* Inset / Neutral */
+  --muted: #28211B;
+  --muted-foreground: #DDD4CA;
+
+  /* Accent */
+  --accent: #2E251E;
+  --accent-foreground: #F5EFEB;
+
+  /* Borders & Inputs */
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.16);
+  --ring: #C69A70;
+
+  /* Status / Feedback */
+  --destructive: #FDA4AF;
+  --destructive-foreground: #161310;
+  --danger: #FDA4AF;
+  --shield: #38BDF8;
+  --tag: #2B231D;
+
+  /* Modal / Dialogue */
+  --modal: #1F1915;
+  --modal-foreground: #FAF6F0;
+
+  /* Mandala & Visual Art */
+  --mandala-stroke: #C69A70;
 }
 
 * {
@@ -27,9 +122,10 @@ body {
   padding: 0;
   overflow-x: hidden;
   scroll-behavior: smooth;
-  background-color: #F8F7F4;
-  color: #2D221A;
+  background-color: var(--canvas);
+  color: var(--primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* ===== MANDALA BACKGROUNDS ===== */
@@ -401,4 +497,363 @@ button:hover .shimmer-btn-ray {
   will-change: transform;
   transform: translateZ(0);
   animation: spinSlow 180s linear infinite;
+}
+
+/* ========================================================
+   INSTANT REACTIVE DARK/LIGHT SANCTUARY OVERRIDES
+   ======================================================== */
+html.dark {
+  color-scheme: dark;
+}
+html.light {
+  color-scheme: light;
+}
+
+/* ========================================================
+   LIGHT MODE: NATURAL SAGE & CREAM CLINICAL SANCTUARY
+   ======================================================== */
+html.light,
+html.light body {
+  background-color: #F8F7F4 !important;
+  color: #2D221A !important;
+}
+
+html.light div.min-h-screen {
+  background-color: #F8F7F4 !important;
+  color: #2D221A !important;
+}
+
+html.light header {
+  background: rgba(248, 247, 244, 0.94) !important;
+  border-bottom: 1px solid #EAE5DE !important;
+}
+
+html.light .bg-white {
+  background-color: #FFFFFF !important;
+  color: #2D221A !important;
+}
+
+html.light .border-\[\#EAE5DE\] {
+  border-color: #EAE5DE !important;
+}
+
+html.light .text-\[\#2D221A\] {
+  color: #2D221A !important;
+}
+
+html.light .text-\[\#6E5D52\] {
+  color: #6E5D52 !important;
+}
+
+
+/* ========================================================
+   DARK MODE: HIGH-CONTRAST OBSIDIAN & HONEY WELLNESS
+   ======================================================== */
+/* 1. Main Background & Canvas */
+html.dark,
+html.dark body {
+  background-color: #1A1613 !important;
+  color: #FAF6F0 !important;
+}
+
+html.dark div.min-h-screen {
+  background-color: #1A1613 !important;
+  color: #FAF6F0 !important;
+}
+
+/* 2. Top Header */
+html.dark header {
+  background: rgba(26, 22, 19, 0.94) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 3. Primary Elevated Cards & Sidebar */
+html.dark .bg-white,
+html.dark aside .bg-white {
+  background-color: #26201B !important;
+  color: #FAF6F0 !important;
+}
+
+html.dark aside {
+  background-color: #1A1613 !important;
+  border-right-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 4. Nested Inset Containers & Highlight Boxes */
+html.dark .bg-\[\#F0ECE7\]\/50,
+html.dark .bg-\[\#F0ECE7\]\/60,
+html.dark .bg-\[\#E8EEE7\]\/40,
+html.dark .bg-\[\#F8F7F4\],
+html.dark .bg-\[\#F0ECE7\],
+html.dark .bg-\[\#E8EEE7\],
+html.dark .bg-\[\#F5F2EB\],
+html.dark .bg-\[\#FAF8F5\],
+html.dark .bg-\[\#EAE5DE\],
+html.dark .bg-gray-100 {
+  background-color: #1E1814 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Inset boxes hover */
+html.dark .hover\:bg-\[\#E8EEE7\]\/40:hover,
+html.dark .hover\:bg-\[\#F0ECE7\]\/60:hover,
+html.dark .hover\:bg-\[\#EAE5DE\]:hover {
+  background-color: #2E251E !important;
+}
+
+/* 5. Borders Across All Dark Mode Elements */
+html.dark .border,
+html.dark .border-t,
+html.dark .border-b,
+html.dark .border-\[\#EAE5DE\],
+html.dark .border-\[\#E8EEE7\],
+html.dark .border-\[\#EAE5DE\]\/60,
+html.dark .border-\[\#EAEAEA\],
+html.dark .border-red-200,
+html.dark .border-rose-200 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 6. Text Legibility & Contrast (Pure clarity) */
+/* Bold Titles & Primary Headings: Pure Crisp White */
+html.dark .text-\[\#2D221A\],
+html.dark .text-\[\#35291F\],
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4,
+html.dark strong,
+html.dark b {
+  color: #FFFFFF !important;
+}
+
+/* Paragraphs & Detailed descriptions: Warm Clear Cream */
+html.dark .text-\[\#6E5D52\],
+html.dark .text-\[\#35291F\]\/70,
+html.dark .text-\[\#35291F\]\/80,
+html.dark .text-gray-700,
+html.dark .text-gray-600 {
+  color: #DDD4CA !important;
+}
+
+/* Muted helper text */
+html.dark .text-gray-500,
+html.dark .text-gray-400 {
+  color: #A89F95 !important;
+}
+
+/* Accent Labels and Highlights: Vibrant Warm Gold */
+html.dark .text-\[\#8C6A4F\] {
+  color: #E2BA91 !important;
+}
+
+/* Sage Green Highlights */
+html.dark .text-\[\#668575\] {
+  color: #92CDAF !important;
+}
+
+/* 7. PHOTO 1 FIX: ONBOARDING STEPPER CONTROLS */
+html.dark .stepper,
+html.dark [class*="stepper"] {
+  --stepper-ink: #FFFFFF !important;
+  --stepper-muted: #D6CCC2 !important;
+  --stepper-faint: rgba(255, 255, 255, 0.3) !important;
+  --stepper-ring: rgba(255, 255, 255, 0.35) !important;
+  --stepper-track: rgba(255, 255, 255, 0.08) !important;
+  --stepper-well: rgba(255, 255, 255, 0.05) !important;
+  --stepper-tile: #2E251E !important;
+  --stepper-tile-edge: rgba(255, 255, 255, 0.14) !important;
+  --stepper-tile-highlight: rgba(255, 255, 255, 0.15) !important;
+  --stepper-frame: rgba(36, 30, 26, 0.95) !important;
+  --stepper-frame-edge: rgba(255, 255, 255, 0.1) !important;
+  --stepper-solid: #668575 !important;
+  --stepper-solid-ink: #FFFFFF !important;
+}
+
+html.dark .stepper__segment {
+  color: #D6CCC2 !important;
+}
+
+html.dark .stepper__segment[data-status='active'] {
+  color: #FFFFFF !important;
+}
+
+html.dark .stepper__badge {
+  color: #D6CCC2 !important;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35) !important;
+  background-color: transparent !important;
+}
+
+html.dark .stepper__badge[data-status='active'] {
+  color: #FFFFFF !important;
+  box-shadow: inset 0 0 0 1.5px #E2BA91 !important;
+}
+
+html.dark .stepper__title {
+  color: #FAF6F0 !important;
+}
+
+html.dark .stepper__desc {
+  color: #B5A89B !important;
+}
+
+html.dark .stepper__glider {
+  background: #2E251E !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14) !important;
+}
+
+/* 8. PHOTO 2 FIX: SIDEBAR SIGN OUT & CHECKBOXES */
+/* Sign Out button at the bottom of the drawer */
+html.dark .text-rose-700,
+html.dark .text-rose-700 svg,
+html.dark button:has(.lucide-log-out) {
+  color: #FDA4AF !important;
+}
+
+html.dark .bg-rose-50\/70,
+html.dark button:has(.lucide-log-out) {
+  background-color: rgba(244, 63, 94, 0.15) !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+  color: #FDA4AF !important;
+}
+
+html.dark .hover\:bg-rose-100\/80:hover,
+html.dark button:has(.lucide-log-out):hover {
+  background-color: rgba(244, 63, 94, 0.25) !important;
+}
+
+/* SpringCheck tactile checkbox ring in dark mode */
+html.dark .border-2.border-\[\#8C6A4F\]\/40 {
+  border-color: rgba(226, 186, 145, 0.6) !important;
+  background-color: #201A15 !important;
+}
+
+html.dark .group:hover .border-2.border-\[\#8C6A4F\]\/40 {
+  border-color: #E2BA91 !important;
+}
+
+html.dark .bg-\[\#8C6A4F\]\/10 {
+  background-color: rgba(226, 186, 145, 0.18) !important;
+  color: #E2BA91 !important;
+}
+
+/* 9. Special Badges, SOS & Alerts */
+html.dark .bg-rose-50,
+html.dark .bg-rose-100 {
+  background-color: rgba(225, 29, 72, 0.18) !important;
+  border-color: rgba(225, 29, 72, 0.35) !important;
+  color: #FDA4AF !important;
+}
+html.dark .text-rose-800 {
+  color: #FDA4AF !important;
+}
+
+html.dark .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.18) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #FCA5A5 !important;
+}
+html.dark .text-red-800 {
+  color: #FCA5A5 !important;
+}
+
+/* 10. Mandalas Subtle Ambient Stroke */
+html.dark svg.explore-corner-mandala g,
+html.dark svg.explore-corner-mandala circle {
+  stroke: #C9A47D !important;
+  opacity: 0.38;
+}
+
+/* 11. Modal Windows & Form Controls */
+html.dark .glass-card,
+html.dark div[style*="background-color: #FFFFFF"],
+html.dark div[style*="backgroundColor: #FFFFFF"] {
+  background-color: #241E1A !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #FAF6F0 !important;
+}
+
+html.dark .nivaran-input,
+html.dark .nivaran-select {
+  background: #1A1512 !important;
+  color: #FFFFFF !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+html.dark .nivaran-input::placeholder {
+  color: #9E9387 !important;
+}
+
+
+/* ========================================================
+   SOS MODAL COMPLETE LIGHT & DARK GUARANTEED STYLES
+   ======================================================== */
+/* --- LIGHT MODE SOS MODAL --- */
+html.light .sos-modal-card {
+  background-color: #FFFDF9 !important;
+  color: #2D221A !important;
+  border-color: rgba(150, 45, 45, 0.25) !important;
+}
+
+html.light .sos-tab-bar {
+  background-color: #F5F2EB !important;
+  border-bottom-color: #EAE5DE !important;
+}
+
+html.light .sos-inner-box {
+  background-color: #F8F7F4 !important;
+  border-color: #EAE5DE !important;
+  color: #2D221A !important;
+}
+
+html.light .sos-clock-circle {
+  background-color: #F8F7F4 !important;
+  border-color: rgba(150, 45, 45, 0.2) !important;
+}
+
+html.light .sos-chip {
+  background-color: #F0ECE7 !important;
+  border-color: #EAE5DE !important;
+  color: #2D221A !important;
+}
+
+html.light .sos-input {
+  background-color: #FFFFFF !important;
+  border-color: #EAE5DE !important;
+  color: #2D221A !important;
+}
+
+/* --- DARK MODE SOS MODAL --- */
+html.dark .sos-modal-card {
+  background-color: #201A16 !important;
+  color: #FAF6F0 !important;
+  border-color: rgba(244, 63, 94, 0.3) !important;
+}
+
+html.dark .sos-tab-bar {
+  background-color: #181411 !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark .sos-inner-box {
+  background-color: #28211B !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #FAF6F0 !important;
+}
+
+html.dark .sos-clock-circle {
+  background-color: #181411 !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+
+html.dark .sos-chip {
+  background-color: #28211B !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #FAF6F0 !important;
+}
+
+html.dark .sos-input {
+  background-color: #181411 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #FAF6F0 !important;
 }
