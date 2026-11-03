@@ -56,6 +56,8 @@ const DEFAULT_PRESCRIPTION: PrescriptionResponse = {
     "Switch mobile display color profile to high-contrast Grayscale",
     "Complete 20-minute morning natural light walk to anchor circadian cortisol rhythm",
     "Place charging station outside of the bedroom for overnight recovery",
+    "Practice 10-second urge pause: touch a physical object before unlocking device",
+    "Initiate digital sunset: shut down all recreational screens 45 minutes before sleep",
   ],
   diet_protocol: {
     short_summary: "High-protein neuro-stabilization with slow-release complex carbohydrates.",
@@ -179,6 +181,213 @@ function restoreTaskStateFromCompletedIds(data: any): TaskState {
   return result;
 }
 
+/**
+ * Merges two TaskState objects with logical OR so no checked items are lost between layers
+ */
+function mergeTaskStates(
+  a: TaskState | null | undefined,
+  b: TaskState | null | undefined
+): TaskState {
+  const result: TaskState = {
+    specialMission: Boolean(a?.specialMission || b?.specialMission),
+    routineTasks: {},
+    nutritionAdherence: Boolean(a?.nutritionAdherence || b?.nutritionAdherence),
+    mindMovement: Boolean(a?.mindMovement || b?.mindMovement),
+  };
+  const allIndices = new Set([
+    ...Object.keys(a?.routineTasks || {}),
+    ...Object.keys(b?.routineTasks || {}),
+  ]);
+  allIndices.forEach((k) => {
+    const idx = parseInt(k, 10);
+    if (!isNaN(idx)) {
+      result.routineTasks[idx] = Boolean(a?.routineTasks?.[idx] || b?.routineTasks?.[idx]);
+    }
+  });
+  return result;
+}
+
+/**
+ * Dual-layer reader: Retrieves saved TaskState across all known user/guest key patterns
+ */
+function getSavedTaskState(
+  userId: string | null | undefined,
+  track: TrackType,
+  day: number
+): TaskState | null {
+  if (typeof window === "undefined") return null;
+  const candidateKeys = [
+    `nivaran_tasks_${userId || "guest"}_${track}_day_${day}`,
+    `nivaran_tasks_${userId || "guest"}_${track}_${day}`,
+    `nivaran_tasks_${track}_day_${day}`,
+    `nivaran_tasks_${track}_${day}`,
+  ];
+  for (const key of candidateKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return restoreTaskStateFromCompletedIds(parsed);
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Dual-layer reader: Checks whether a specific day is marked completed
+ */
+function getSavedDayComplete(
+  userId: string | null | undefined,
+  track: TrackType,
+  day: number
+): boolean {
+  if (typeof window === "undefined") return false;
+  const candidateKeys = [
+    `nivaran_day_done_${userId || "guest"}_${track}_day_${day}`,
+    `nivaran_day_done_${userId || "guest"}_${track}_${day}`,
+    `nivaran_day_done_${track}_day_${day}`,
+    `nivaran_day_done_${track}_${day}`,
+  ];
+  for (const key of candidateKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === "true") return true;
+    } catch {}
+  }
+  return false;
+}
+
+/**
+ * Dual-layer writer: Atomically persists TaskState to all standard localStorage keys
+ */
+function persistTaskStateToStorage(
+  userId: string | null | undefined,
+  track: TrackType,
+  day: number,
+  state: TaskState,
+  isDone?: boolean
+) {
+  if (typeof window === "undefined") return;
+  const keys = [
+    `nivaran_tasks_${userId || "guest"}_${track}_day_${day}`,
+    `nivaran_tasks_${track}_day_${day}`,
+  ];
+  const jsonStr = JSON.stringify(state);
+  for (const key of keys) {
+    try {
+      localStorage.setItem(key, jsonStr);
+    } catch {}
+  }
+  if (isDone !== undefined) {
+    const doneKeys = [
+      `nivaran_day_done_${userId || "guest"}_${track}_day_${day}`,
+      `nivaran_day_done_${userId || "guest"}_${track}_${day}`,
+      `nivaran_day_done_${track}_day_${day}`,
+      `nivaran_day_done_${track}_${day}`,
+    ];
+    for (const dKey of doneKeys) {
+      try {
+        if (isDone) {
+          localStorage.setItem(dKey, "true");
+        } else {
+          localStorage.removeItem(dKey);
+        }
+      } catch {}
+    }
+  }
+}
+
+/**
+ * Checks whether a prescription contains placeholder default fallback tasks
+ */
+function isDefaultFallbackTasks(rx: PrescriptionResponse | null | undefined): boolean {
+  if (!rx) return true;
+  if (!Array.isArray(rx.routine_tasks) || rx.routine_tasks.length < 6) return true;
+  if (
+    rx.special_mission === DEFAULT_PRESCRIPTION.special_mission &&
+    rx.routine_tasks[0] === DEFAULT_PRESCRIPTION.routine_tasks[0] &&
+    rx.routine_tasks[1] === DEFAULT_PRESCRIPTION.routine_tasks[1]
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Retrieves valid, non-fallback prescription from localStorage across all known key patterns
+ */
+function getValidCachedPrescription(
+  userId: string | null | undefined,
+  track: TrackType,
+  day: number
+): PrescriptionResponse | null {
+  if (typeof window === "undefined") return null;
+  const candidateKeys = [
+    `nivaran_rx_${userId || "guest"}_${track}_day_${day}`,
+    `nivaran_rx_${userId || "guest"}_${track}_${day}`,
+    `nivaran_rx_${track}_${day}`,
+    "nivaran_prescription"
+  ];
+
+  for (const key of candidateKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          parsed.track === track &&
+          Number(parsed.day_number) === Number(day) &&
+          Array.isArray(parsed.routine_tasks) &&
+          parsed.routine_tasks.length >= 6 &&
+          !isDefaultFallbackTasks(parsed)
+        ) {
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Atomically writes prescription to all standard localStorage keys.
+ * Never allows fallback/default placeholder tasks to overwrite valid AI-generated tasks in storage.
+ */
+function persistPrescriptionToStorage(
+  userId: string | null | undefined,
+  rx: PrescriptionResponse,
+  force: boolean = false
+) {
+  if (typeof window === "undefined" || !rx) return;
+  const track = rx.track as TrackType;
+  const day = Number(rx.day_number);
+
+  if (!force && isDefaultFallbackTasks(rx)) {
+    const existing = getValidCachedPrescription(userId, track, day);
+    if (existing && !isDefaultFallbackTasks(existing)) {
+      console.warn("Blocked fallback prescription from overwriting valid AI tasks in localStorage");
+      return;
+    }
+  }
+
+  const jsonStr = JSON.stringify(rx);
+  const keys = [
+    `nivaran_rx_${userId || "guest"}_${track}_day_${day}`,
+    `nivaran_rx_${userId || "guest"}_${track}_${day}`,
+    `nivaran_rx_${track}_${day}`,
+    "nivaran_prescription"
+  ];
+  for (const key of keys) {
+    try {
+      localStorage.setItem(key, jsonStr);
+    } catch {}
+  }
+}
+
 interface DashboardTrackProgress {
   currentDay: number;
   streak: number;
@@ -204,8 +413,37 @@ export default function DashboardPage() {
     jf: { currentDay: 1, streak: 0, shields: 1, targetDays: 28 },
   });
 
+  const [isMounted, setIsMounted] = useState<boolean>(false);
   const [prescription, setPrescription] = useState<PrescriptionResponse>(DEFAULT_PRESCRIPTION);
   const [isLoadingPrescription, setIsLoadingPrescription] = useState<boolean>(false);
+  const activeReqRef = React.useRef<string>("");
+  const hasInitializedRef = React.useRef<boolean>(false);
+  const lockedPrescriptionRef = React.useRef<{
+    track: TrackType;
+    day: number;
+    isAiGenerated: boolean;
+  }>({
+    track: "sm",
+    day: 1,
+    isAiGenerated: false,
+  });
+
+  const setGuardedPrescription = useCallback(
+    (
+      newRxOrUpdater: PrescriptionResponse | ((prev: PrescriptionResponse) => PrescriptionResponse),
+      force: boolean = false
+    ) => {
+      setPrescription((prev) => {
+        const next = typeof newRxOrUpdater === "function" ? newRxOrUpdater(prev) : newRxOrUpdater;
+        if (!force && !isDefaultFallbackTasks(prev) && isDefaultFallbackTasks(next)) {
+          console.warn("Blocked fallback tasks from overwriting valid AI tasks in state");
+          return prev;
+        }
+        return next;
+      });
+    },
+    []
+  );
 
   // Daily Tasks Checklist State (Stored per track and day)
   const [taskState, setTaskState] = useState<TaskState>({
@@ -247,7 +485,10 @@ export default function DashboardPage() {
   // 1. INITIAL MOUNT: AUTH CHECK & FULL DATA FLOW PERSISTENCE
   // ========================================================
   useEffect(() => {
-    let isMounted = true;
+    setIsMounted(true);
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+    let isSubscribed = true;
 
     async function initializeDashboard() {
       if (typeof window === "undefined") return;
@@ -301,7 +542,7 @@ export default function DashboardPage() {
         localStorage.setItem("nivaran_auth_user", JSON.stringify(guestUser));
       }
 
-      if (!isMounted) return;
+      if (!isSubscribed) return;
 
       // 2. Fetch Profile from Supabase (if valid UUID) or localStorage
       let loadedProfile = DEFAULT_PROFILE;
@@ -325,26 +566,29 @@ export default function DashboardPage() {
         }
       }
 
-      if (loadedProfile.id === DEFAULT_PROFILE.id) {
-        const savedProfile = localStorage.getItem("nivaran_profile");
-        if (savedProfile) {
-          try {
-            loadedProfile = JSON.parse(savedProfile);
-          } catch {}
-        }
+      const savedProfile = localStorage.getItem("nivaran_profile");
+      if (savedProfile) {
+        try {
+          const parsed = JSON.parse(savedProfile);
+          loadedProfile = {
+            ...loadedProfile,
+            ...parsed,
+            active_track: parsed.active_track || loadedProfile.active_track || "sm",
+          };
+        } catch {}
       }
 
       if (activeUserId && loadedProfile.id === DEFAULT_PROFILE.id) {
         loadedProfile.id = activeUserId;
       }
 
-      if (isMounted) {
+      if (isSubscribed) {
         setProfile(loadedProfile);
         localStorage.setItem("nivaran_profile", JSON.stringify(loadedProfile));
       }
 
       const activeTrack: TrackType = loadedProfile.active_track || "sm";
-      if (isMounted) {
+      if (isSubscribed) {
         setCurrentTrack(activeTrack);
       }
 
@@ -392,7 +636,17 @@ export default function DashboardPage() {
       if (savedProgress) {
         try {
           const parsed = JSON.parse(savedProgress);
-          progressMap = { ...progressMap, ...parsed };
+          Object.keys(parsed).forEach((k) => {
+            const t = k as TrackType;
+            if (t in progressMap) {
+              progressMap[t] = {
+                ...progressMap[t],
+                ...parsed[t],
+                currentDay: Math.max(parsed[t]?.currentDay || 1, progressMap[t].currentDay),
+                streak: Math.max(parsed[t]?.streak ?? 0, progressMap[t].streak),
+              };
+            }
+          });
         } catch {}
       }
 
@@ -405,8 +659,8 @@ export default function DashboardPage() {
           if (t && t in progressMap) {
             progressMap[t] = {
               ...progressMap[t],
-              currentDay: parsed.current_day || progressMap[t].currentDay,
-              streak: parsed.streak ?? progressMap[t].streak,
+              currentDay: Math.max(parsed.current_day || 1, progressMap[t].currentDay),
+              streak: Math.max(parsed.streak ?? 0, progressMap[t].streak),
               shields: parsed.shields ?? progressMap[t].shields,
               targetDays:
                 parsed.target_days || parsed.targetDays || progressMap[t].targetDays || 28,
@@ -421,16 +675,17 @@ export default function DashboardPage() {
         } catch {}
       }
 
-      if (isMounted) {
+      if (isSubscribed) {
         setAllTracksProgress(progressMap);
         localStorage.setItem("nivaran_all_tracks_progress", JSON.stringify(progressMap));
       }
 
       const activeDayNumber = progressMap[activeTrack]?.currentDay || 1;
 
-      // 4. Fetch today's prescription from daily_prescriptions (or trigger generation if missing)
-      let activeRx: PrescriptionResponse | null = null;
-      if (supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
+      // 4. Fetch today's prescription: Check valid cache first across all localStorage keys
+      let activeRx: PrescriptionResponse | null = getValidCachedPrescription(activeUserId, activeTrack, activeDayNumber);
+
+      if (!activeRx && supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
         try {
           const { data: rxRows } = await supabase
             .from("daily_prescriptions")
@@ -442,7 +697,7 @@ export default function DashboardPage() {
 
           if (rxRows && rxRows.length > 0) {
             const row = rxRows[0];
-            activeRx = {
+            const parsedRx: PrescriptionResponse = {
               track: row.track,
               day_number: row.day_number,
               phase: row.phase,
@@ -473,14 +728,27 @@ export default function DashboardPage() {
                 row.why_this_works ||
                 "Clinical behavioral activation protocol rewiring prefrontal dopamine circuits.",
             };
+            if (!isDefaultFallbackTasks(parsedRx)) {
+              activeRx = parsedRx;
+            }
           }
         } catch (rxErr) {
           console.warn("Error querying daily_prescriptions from Supabase:", rxErr);
         }
       }
 
-      if (!activeRx) {
-        // Trigger generation via FastAPI backend
+      if (activeRx && !isDefaultFallbackTasks(activeRx)) {
+        if (isSubscribed) {
+          setGuardedPrescription(activeRx);
+          persistPrescriptionToStorage(activeUserId, activeRx);
+          lockedPrescriptionRef.current = {
+            track: activeTrack,
+            day: activeDayNumber,
+            isAiGenerated: true,
+          };
+        }
+      } else {
+        setIsLoadingPrescription(true);
         const genPayload: BiometricInput = {
           user_id: activeUserId,
           username: loadedProfile.username,
@@ -500,23 +768,45 @@ export default function DashboardPage() {
           survey_responses: progressMap[activeTrack]?.surveyResponses,
         };
         try {
-          activeRx = await generatePrescription(genPayload);
+          const generatedRx = await generatePrescription(genPayload);
+          if (isSubscribed && generatedRx) {
+            setGuardedPrescription(generatedRx);
+            persistPrescriptionToStorage(activeUserId, generatedRx);
+            lockedPrescriptionRef.current = {
+              track: activeTrack,
+              day: activeDayNumber,
+              isAiGenerated: !isDefaultFallbackTasks(generatedRx),
+            };
+          }
         } catch (genErr) {
           console.warn("Generate prescription fallback:", genErr);
-          activeRx = {
+          const fallbackRx: PrescriptionResponse = {
             ...DEFAULT_PRESCRIPTION,
             track: activeTrack,
             day_number: activeDayNumber,
           };
+          if (isSubscribed) {
+            setGuardedPrescription(fallbackRx);
+            persistPrescriptionToStorage(activeUserId, fallbackRx);
+          }
+        } finally {
+          if (isSubscribed) {
+            setIsLoadingPrescription(false);
+          }
         }
       }
 
-      if (isMounted && activeRx) {
-        setPrescription(activeRx);
-        localStorage.setItem("nivaran_prescription", JSON.stringify(activeRx));
+      // 5. Fetch today's completed task IDs: Dual-layer read (localStorage immediate + Supabase sync)
+      const localTaskState = getSavedTaskState(activeUserId, activeTrack, activeDayNumber);
+      const localDayDone = getSavedDayComplete(activeUserId, activeTrack, activeDayNumber);
+
+      if (localTaskState && isSubscribed) {
+        setTaskState(localTaskState);
+      }
+      if (localDayDone && isSubscribed) {
+        setIsDayCompleted(true);
       }
 
-      // 5. Fetch today's completed task IDs from daily_logs to restore checkbox states
       if (supabase && isSupabaseConfigured() && isValidUuid(activeUserId)) {
         try {
           const { data: logRow } = await supabase
@@ -527,20 +817,32 @@ export default function DashboardPage() {
             .eq("day_number", activeDayNumber)
             .maybeSingle();
 
-          if (logRow && isMounted) {
-            const restoredState = restoreTaskStateFromCompletedIds(logRow.tasks_completed);
-            setTaskState(restoredState);
-            setIsDayCompleted(Boolean(logRow.completed_at));
-            localStorage.setItem(
-              `nivaran_tasks_${activeTrack}_day_${activeDayNumber}`,
-              JSON.stringify(restoredState)
-            );
-            if (logRow.completed_at) {
-              localStorage.setItem(
-                `nivaran_day_done_${activeTrack}_${activeDayNumber}`,
-                "true"
-              );
-            }
+          if (logRow && isSubscribed) {
+            const remoteState = restoreTaskStateFromCompletedIds(logRow.tasks_completed);
+            const isRemoteDone = Boolean(logRow.completed_at);
+            const mergedState = mergeTaskStates(localTaskState, remoteState);
+            const mergedDone = localDayDone || isRemoteDone;
+            setTaskState(mergedState);
+            setIsDayCompleted(mergedDone);
+            persistTaskStateToStorage(activeUserId, activeTrack, activeDayNumber, mergedState, mergedDone);
+          } else if (localTaskState && isSubscribed) {
+            // Local state has completed tasks not yet in Supabase - sync to cloud in background
+            const completedIds = getCompletedTaskIds(localTaskState);
+            supabase
+              .from("daily_logs")
+              .upsert(
+                {
+                  user_id: activeUserId,
+                  track: activeTrack,
+                  day_number: activeDayNumber,
+                  tasks_completed: completedIds,
+                  completed_at: localDayDone ? new Date().toISOString() : null,
+                },
+                { onConflict: "user_id,track,day_number" }
+              )
+              .then(({ error }: { error: any }) => {
+                if (error) console.warn("Background daily_logs sync warning:", error);
+              });
           }
         } catch (logErr) {
           console.warn("Error querying daily_logs from Supabase:", logErr);
@@ -551,17 +853,111 @@ export default function DashboardPage() {
     initializeDashboard();
 
     return () => {
-      isMounted = false;
+      isSubscribed = false;
     };
-  }, [router]);
+  }, []);
 
   // Fetch prescription for a specific track and day
   const fetchTrackPrescription = async (
     track: TrackType,
     day: number,
-    activeProf: UserProfile = profile
+    activeProf: UserProfile = profile,
+    forceRefresh: boolean = false
   ) => {
+    // 0. Guard against redundant fetches or overwriting already locked AI tasks for the same track & day
+    if (
+      !forceRefresh &&
+      lockedPrescriptionRef.current.track === track &&
+      lockedPrescriptionRef.current.day === day &&
+      lockedPrescriptionRef.current.isAiGenerated &&
+      prescription.track === track &&
+      prescription.day_number === day &&
+      !isDefaultFallbackTasks(prescription)
+    ) {
+      return;
+    }
+
+    // 1. Check local storage cache immediately across all keys
+    if (!forceRefresh) {
+      const cached = getValidCachedPrescription(activeProf.id, track, day);
+      if (cached) {
+        setGuardedPrescription(cached);
+        persistPrescriptionToStorage(activeProf.id, cached);
+        lockedPrescriptionRef.current = {
+          track,
+          day,
+          isAiGenerated: true,
+        };
+        return;
+      }
+    }
+
+    // 2. Check Supabase cache
+    const supabase = getSupabaseBrowserClient();
+    if (!forceRefresh && supabase && isSupabaseConfigured() && isValidUuid(activeProf.id)) {
+      try {
+        const { data: rxRows } = await supabase
+          .from("daily_prescriptions")
+          .select("*")
+          .eq("user_id", activeProf.id)
+          .eq("track", track)
+          .eq("day_number", day)
+          .limit(1);
+
+        if (rxRows && rxRows.length > 0) {
+          const row = rxRows[0];
+          const cachedRx: PrescriptionResponse = {
+            track: row.track,
+            day_number: row.day_number,
+            phase: row.phase,
+            phase_name:
+              row.phase === 1
+                ? "Acute Withdrawal & Stabilization"
+                : row.phase === 2
+                ? "Dopamine Rewiring & Habit Substitution"
+                : row.phase === 3
+                ? "Stress Inoculation & Trigger Mastery"
+                : "Neuroplastic Maintenance & Identity",
+            computed_metrics: {
+              bmi: 22.0,
+              bmi_category: "normal",
+              bmr: 1600,
+              tdee: 2200,
+              target_calories: row.diet_protocol?.calorie_target || 2050,
+              hydration_liters: row.diet_protocol?.hydration_liters || 2.5,
+              phase: row.phase,
+              phase_name: "Phase " + row.phase,
+            },
+            special_mission: row.special_mission,
+            routine_tasks: row.routine_tasks || [],
+            diet_protocol: row.diet_protocol,
+            exercise_protocol: row.exercise_protocol,
+            mental_protocol: row.mental_protocol,
+            why_this_works:
+              row.why_this_works ||
+              "Clinical behavioral activation protocol rewiring prefrontal dopamine circuits.",
+          };
+          if (!isDefaultFallbackTasks(cachedRx)) {
+            setGuardedPrescription(cachedRx);
+            persistPrescriptionToStorage(activeProf.id, cachedRx);
+            lockedPrescriptionRef.current = {
+              track,
+              day,
+              isAiGenerated: true,
+            };
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Supabase track prescription check failed:", e);
+      }
+    }
+
+    // 3. If neither cache has it, generate via AI with race-condition prevention
+    const reqId = `${track}_${day}_${Date.now()}`;
+    activeReqRef.current = reqId;
     setIsLoadingPrescription(true);
+
     const payload: BiometricInput = {
       user_id: activeProf.id,
       username: activeProf.username,
@@ -583,37 +979,41 @@ export default function DashboardPage() {
     };
 
     try {
-      const res = await generatePrescription(payload);
-      setPrescription(res);
-      localStorage.setItem("nivaran_prescription", JSON.stringify(res));
+      const res = await generatePrescription(payload, forceRefresh);
+      if (activeReqRef.current === reqId && res) {
+        setGuardedPrescription(res, true);
+        persistPrescriptionToStorage(activeProf.id, res, true);
+        lockedPrescriptionRef.current = {
+          track,
+          day,
+          isAiGenerated: !isDefaultFallbackTasks(res),
+        };
+      }
     } catch (err) {
       console.warn("Using local fallback prescription:", err);
-      setPrescription((prev) => ({
-        ...prev,
-        track,
-        day_number: day,
-      }));
+      if (activeReqRef.current === reqId) {
+        setGuardedPrescription((prev) => {
+          if (!isDefaultFallbackTasks(prev)) return prev;
+          return {
+            ...DEFAULT_PRESCRIPTION,
+            track,
+            day_number: day,
+          };
+        });
+      }
     } finally {
-      setIsLoadingPrescription(false);
+      if (activeReqRef.current === reqId) {
+        setIsLoadingPrescription(false);
+      }
     }
   };
 
-  // Synchronize Task Completion State from local storage on track/day change
+  // Synchronize Task Completion State from dual-layer storage on track/day change
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const savedTasks = localStorage.getItem(taskStorageKey);
-    if (savedTasks) {
-      try {
-        const parsed = JSON.parse(savedTasks);
-        setTaskState(parsed);
-      } catch (e) {
-        setTaskState({
-          specialMission: false,
-          routineTasks: {},
-          nutritionAdherence: false,
-          mindMovement: false,
-        });
-      }
+    const saved = getSavedTaskState(profile.id, currentTrack, currentDayNumber);
+    if (saved) {
+      setTaskState(saved);
     } else {
       setTaskState({
         specialMission: false,
@@ -623,22 +1023,41 @@ export default function DashboardPage() {
       });
     }
 
-    const savedDayComplete = localStorage.getItem(`nivaran_day_done_${currentTrack}_${currentDayNumber}`);
-    setIsDayCompleted(savedDayComplete === "true");
-  }, [currentTrack, currentDayNumber, taskStorageKey]);
+    const savedDone = getSavedDayComplete(profile.id, currentTrack, currentDayNumber);
+    setIsDayCompleted(savedDone);
+  }, [currentTrack, currentDayNumber, profile.id]);
 
   // ========================================================
-  // 2. TASK COMPLETION: Toggling saves completed task array into daily_logs
+  // 2. TASK COMPLETION: Dual-layer persistence (localStorage immediate + Supabase background)
   // ========================================================
   const updateTasks = useCallback(
     (updater: (prev: TaskState) => TaskState) => {
       setTaskState((prev) => {
         const next = updater(prev);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(taskStorageKey, JSON.stringify(next));
-        }
 
-        // Persist completed task array into daily_logs in Supabase
+        // 1. Instantly save progress to dual-layer localStorage (keyed by user/guest ID & track/day)
+        persistTaskStateToStorage(profile.id, currentTrack, currentDayNumber, next);
+
+        // Also update track_progress snapshot in localStorage
+        const activeProg = allTracksProgress[currentTrack] || {
+          currentDay: currentDayNumber,
+          streak: 0,
+          shields: 1,
+          targetDays: targetDays,
+        };
+        const progressPayload = {
+          track: currentTrack,
+          current_day: currentDayNumber,
+          streak: activeProg.streak || 0,
+          shields: activeProg.shields || 1,
+          target_days: targetDays,
+        };
+        try {
+          localStorage.setItem("nivaran_track_progress", JSON.stringify(progressPayload));
+          localStorage.setItem(`nivaran_track_progress_${profile.id || "guest"}_${currentTrack}`, JSON.stringify(progressPayload));
+        } catch {}
+
+        // 2. Persist completed task array into daily_logs in Supabase in background if authenticated
         const completedIds = getCompletedTaskIds(next);
         const supabase = getSupabaseBrowserClient();
         if (supabase && isSupabaseConfigured() && isValidUuid(profile.id)) {
@@ -665,7 +1084,7 @@ export default function DashboardPage() {
         return next;
       });
     },
-    [taskStorageKey, profile.id, currentTrack, currentDayNumber]
+    [profile.id, currentTrack, currentDayNumber, allTracksProgress, targetDays]
   );
 
   // Toggles
@@ -698,16 +1117,14 @@ export default function DashboardPage() {
     0
   );
 
-  const totalTasks = 1 + routineTasksList.length + 1 + 1; // Special Mission + Routines + Nutrition + Mind/Movement
+  const totalTasks = 1 + routineTasksList.length; // 1 Special Mission + 6 Normal Tasks = 7 total tasks
   const completedTasks =
     (taskState.specialMission ? 1 : 0) +
-    completedRoutineCount +
-    (taskState.nutritionAdherence ? 1 : 0) +
-    (taskState.mindMovement ? 1 : 0);
+    completedRoutineCount;
 
   const allTasksCompleted = completedTasks === totalTasks && totalTasks > 0;
 
-  // Handle Track Switching
+  // Handle Track Switching: Dual-layer read & restore
   const handleSelectTrack = async (track: TrackType) => {
     if (track === currentTrack) return;
     setCurrentTrack(track);
@@ -719,6 +1136,21 @@ export default function DashboardPage() {
     if (typeof window !== "undefined") {
       localStorage.setItem("nivaran_profile", JSON.stringify(updated));
     }
+
+    // Immediately restore tasks and day completion for selected track from dual-layer localStorage
+    const savedForTrack = getSavedTaskState(profile.id, track, day);
+    if (savedForTrack) {
+      setTaskState(savedForTrack);
+    } else {
+      setTaskState({
+        specialMission: false,
+        routineTasks: {},
+        nutritionAdherence: false,
+        mindMovement: false,
+      });
+    }
+    const isTrackDayDone = getSavedDayComplete(profile.id, track, day);
+    setIsDayCompleted(isTrackDayDone);
 
     const supabase = getSupabaseBrowserClient();
     if (supabase && isSupabaseConfigured() && isValidUuid(profile.id)) {
@@ -736,17 +1168,12 @@ export default function DashboardPage() {
           .maybeSingle();
 
         if (logRow) {
-          const restored = restoreTaskStateFromCompletedIds(logRow.tasks_completed);
-          setTaskState(restored);
-          setIsDayCompleted(Boolean(logRow.completed_at));
-        } else {
-          setTaskState({
-            specialMission: false,
-            routineTasks: {},
-            nutritionAdherence: false,
-            mindMovement: false,
-          });
-          setIsDayCompleted(false);
+          const remoteState = restoreTaskStateFromCompletedIds(logRow.tasks_completed);
+          const merged = mergeTaskStates(savedForTrack, remoteState);
+          const done = isTrackDayDone || Boolean(logRow.completed_at);
+          setTaskState(merged);
+          setIsDayCompleted(done);
+          persistTaskStateToStorage(profile.id, track, day, merged, done);
         }
       } catch (e) {
         console.warn("Track switch sync error:", e);
@@ -768,21 +1195,26 @@ export default function DashboardPage() {
       setIsMandalaPulsing(false);
     }, 2400);
 
-    const activeProgress = allTracksProgress[currentTrack] || { currentDay: 1, streak: 0, shields: 1 };
-    const newStreak = activeProgress.streak + 1;
+    const activeProgress = allTracksProgress[currentTrack] || {
+      currentDay: currentDayNumber,
+      streak: 0,
+      shields: 1,
+      targetDays: targetDays,
+    };
+    const newStreak = (activeProgress.streak || 0) + 1;
     const newShields = newStreak % 3 === 0 ? (activeProgress.shields || 1) + 1 : (activeProgress.shields || 1);
-    const nextDay = activeProgress.currentDay + 1;
+    const nextDay = Math.max(activeProgress.currentDay || currentDayNumber, currentDayNumber) + 1;
     const nowIso = new Date().toISOString();
 
     const completedIds = getCompletedTaskIds(taskState);
 
-    // 1. Record completed_at: NOW() in daily_logs
-    // 2. Increment streak by 1 in track_progress (grant +1 shield if streak % 3 == 0)
-    // 3. Set current_day = current_day + 1
+    // 1. Dual-layer storage: Mark current day completed in localStorage
+    persistTaskStateToStorage(profile.id, currentTrack, currentDayNumber, taskState, true);
+
+    // 2. Sync completion to Supabase daily_logs and track_progress in background if authenticated
     const supabase = getSupabaseBrowserClient();
     if (supabase && isSupabaseConfigured() && isValidUuid(profile.id)) {
       try {
-        // Record completion in daily_logs
         await supabase.from("daily_logs").upsert(
           {
             user_id: profile.id,
@@ -794,7 +1226,6 @@ export default function DashboardPage() {
           { onConflict: "user_id,track,day_number" }
         );
 
-        // Update track_progress with incremented streak and next day
         await supabase.from("track_progress").upsert(
           sanitizeTrackProgressForDb({
             user_id: profile.id,
@@ -815,7 +1246,7 @@ export default function DashboardPage() {
       }
     }
 
-    // 4. Call FastAPI to generate Day current_day + 1 prescription, update local state, and refresh dashboard
+    // 3. Call FastAPI to generate Day current_day + 1 prescription, update local state, and refresh dashboard
     setAdvancingDay(true);
     const nextPayload: BiometricInput = {
       user_id: profile.id,
@@ -827,6 +1258,7 @@ export default function DashboardPage() {
       activity_level: profile.activity_level,
       track: currentTrack,
       day_number: nextDay,
+      current_day: nextDay,
       medical_flags: profile.medical_flags || [],
       medical_notes: profile.medical_notes || "",
       dietary_preference: profile.dietary_preference || "vegetarian",
@@ -839,7 +1271,7 @@ export default function DashboardPage() {
 
     let nextPrescription: PrescriptionResponse;
     try {
-      nextPrescription = await generatePrescription(nextPayload);
+      nextPrescription = await generatePrescription(nextPayload, true);
     } catch (genErr) {
       console.warn("Generate next day prescription fallback:", genErr);
       nextPrescription = {
@@ -848,7 +1280,7 @@ export default function DashboardPage() {
       };
     }
 
-    const updatedTracksProgress = {
+    const updatedTracksProgress: Record<TrackType, DashboardTrackProgress> = {
       ...allTracksProgress,
       [currentTrack]: {
         ...activeProgress,
@@ -858,11 +1290,6 @@ export default function DashboardPage() {
       },
     };
 
-    setAllTracksProgress(updatedTracksProgress);
-    setPrescription(nextPrescription);
-    setIsDayCompleted(false);
-    setAdvancingDay(false);
-
     // Reset daily tasks checklist for the fresh day
     const resetTasks: TaskState = {
       specialMission: false,
@@ -870,12 +1297,36 @@ export default function DashboardPage() {
       nutritionAdherence: false,
       mindMovement: false,
     };
+
+    // Dual-layer storage: Initialize next day fresh in localStorage
+    persistTaskStateToStorage(profile.id, currentTrack, nextDay, resetTasks, false);
+
+    setAllTracksProgress(updatedTracksProgress);
+    setGuardedPrescription(nextPrescription, true);
+    persistPrescriptionToStorage(profile.id, nextPrescription, true);
+    lockedPrescriptionRef.current = {
+      track: currentTrack,
+      day: nextDay,
+      isAiGenerated: !isDefaultFallbackTasks(nextPrescription),
+    };
+    setIsDayCompleted(false);
+    setAdvancingDay(false);
     setTaskState(resetTasks);
 
     if (typeof window !== "undefined") {
+      const progressPayload = {
+        track: currentTrack,
+        current_day: nextDay,
+        streak: newStreak,
+        shields: newShields,
+        target_days: activeProgress.targetDays || 28,
+        severity_score: activeProgress.severityScore,
+        severity_level: activeProgress.severityLevel,
+        survey_responses: activeProgress.surveyResponses,
+      };
       localStorage.setItem("nivaran_all_tracks_progress", JSON.stringify(updatedTracksProgress));
-      localStorage.setItem("nivaran_prescription", JSON.stringify(nextPrescription));
-      localStorage.setItem(`nivaran_tasks_${currentTrack}_day_${nextDay}`, JSON.stringify(resetTasks));
+      localStorage.setItem("nivaran_track_progress", JSON.stringify(progressPayload));
+      localStorage.setItem(`nivaran_track_progress_${profile.id || "guest"}_${currentTrack}`, JSON.stringify(progressPayload));
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
@@ -908,10 +1359,17 @@ export default function DashboardPage() {
   // Profile update callback
   const handleProfileUpdated = (updatedProfile: UserProfile, newPrescription: PrescriptionResponse) => {
     setProfile(updatedProfile);
-    setPrescription(newPrescription);
+    setGuardedPrescription(newPrescription, true);
+    const track = updatedProfile.active_track || "sm";
+    const day = allTracksProgress[track]?.currentDay || 1;
+    persistPrescriptionToStorage(updatedProfile.id, newPrescription, true);
+    lockedPrescriptionRef.current = {
+      track,
+      day,
+      isAiGenerated: !isDefaultFallbackTasks(newPrescription),
+    };
     if (typeof window !== "undefined") {
       localStorage.setItem("nivaran_profile", JSON.stringify(updatedProfile));
-      localStorage.setItem("nivaran_prescription", JSON.stringify(newPrescription));
     }
   };
 
@@ -962,7 +1420,9 @@ export default function DashboardPage() {
 
             {/* Active Track Name Pill */}
             <span className="text-xs sm:text-sm font-medium text-[#6E5D52] bg-[#F0ECE7] px-3 py-1 rounded-full truncate">
-              {trackTitles[currentTrack] || "Recovery Track"} · Day {currentDayNumber}
+              {!isMounted
+                ? "Mobile & Screen Detox · Day 1"
+                : `${trackTitles[currentTrack] || "Recovery Track"} · Day ${currentDayNumber}`}
             </span>
           </div>
 
@@ -1015,9 +1475,9 @@ export default function DashboardPage() {
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="text-2xl sm:text-3xl font-black text-[#2D221A]">
-                    Day {currentDayNumber} <span className="text-[#6E5D52] font-semibold text-lg sm:text-xl">/ {targetDays}</span>
+                    Day {!isMounted ? 1 : currentDayNumber} <span className="text-[#6E5D52] font-semibold text-lg sm:text-xl">/ {!isMounted ? 28 : targetDays}</span>
                   </span>
-                  {activeTrackProgress.severityScore && (
+                  {isMounted && activeTrackProgress.severityScore && (
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
                         activeTrackProgress.severityLevel === "minor"
@@ -1034,14 +1494,18 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <span className="text-xs text-[#6E5D52] font-medium block mt-0.5">
-                  Phase {prescription.phase || 1} · {prescription.phase_name || "Acute Stabilization"}
+                  {!isMounted
+                    ? "Phase 1 · Acute Stabilization"
+                    : `Phase ${prescription.phase || 1} · ${
+                        prescription.phase_name?.replace(/^Phase \d+\s*[·-]\s*/, "") || "Acute Stabilization"
+                      }`}
                 </span>
               </div>
 
               {/* Streak Counter */}
               <div className="bg-[#F0ECE7] text-[#8C6A4F] border border-[#EAE5DE] px-3.5 py-1.5 rounded-xl font-bold text-sm sm:text-base flex items-center gap-1.5">
                 <Flame className="w-4 h-4 fill-[#8C6A4F] text-[#8C6A4F]" />
-                <span>{activeTrackProgress.streak || 0} Days Streak</span>
+                <span>{!isMounted ? 0 : (activeTrackProgress.streak || 0)} Days Streak</span>
               </div>
             </div>
 
@@ -1065,7 +1529,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between border-b border-[#EAE5DE] pb-3">
               <h2 className="text-lg font-bold text-[#2D221A]">Daily Tasks</h2>
               <span className="text-xs font-semibold text-[#6E5D52]">
-                {completedTasks} / {totalTasks} Completed
+                {!isMounted ? "0 / 7 Completed" : `${completedTasks} / ${totalTasks} Completed`}
               </span>
             </div>
 
@@ -1094,14 +1558,14 @@ export default function DashboardPage() {
                   Special Mission
                 </span>
                 <p className={`text-xs sm:text-sm font-semibold leading-relaxed ${taskState.specialMission ? "line-through text-[#6E5D52]" : "text-[#2D221A]"}`}>
-                  {prescription.special_mission}
+                  {!isMounted ? DEFAULT_PRESCRIPTION.special_mission : prescription.special_mission}
                 </p>
               </div>
             </div>
 
             {/* Routine Checklist using SpringCheck */}
             <SpringCheck
-              tasks={routineTasksList}
+              tasks={!isMounted ? DEFAULT_PRESCRIPTION.routine_tasks : routineTasksList}
               checkedState={taskState.routineTasks}
               onToggleTask={toggleRoutineTask}
             />

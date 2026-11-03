@@ -10,8 +10,14 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 /**
  * Generate a personalized daily recovery prescription based on user biometrics.
  */
-export async function generatePrescription(payload: BiometricInput): Promise<PrescriptionResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/prescriptions/generate`, {
+export async function generatePrescription(
+  payload: BiometricInput,
+  forceRefresh: boolean = false
+): Promise<PrescriptionResponse> {
+  const url = forceRefresh
+    ? `${API_BASE_URL}/api/v1/prescriptions/generate?force_refresh=true`
+    : `${API_BASE_URL}/api/v1/prescriptions/generate`;
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

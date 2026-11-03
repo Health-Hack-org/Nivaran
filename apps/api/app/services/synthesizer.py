@@ -241,51 +241,306 @@ def _build_deterministic_missions(
     biometrics: BiometricInput,
     metrics: ComputedMetrics
 ) -> tuple[str, List[str], str]:
-    """Generates track-specific and phase-specific daily missions, tasks, and scientific rationale."""
+    """Generates track-specific and day-progressive daily missions, tasks, and scientific rationale."""
     day = biometrics.get_effective_day()
     target_days = getattr(biometrics, "target_days", 28) or 28
     phase = metrics.phase
     track = biometrics.track
 
-    mission_map = {
+    # Day-progressive rotating cycle (Days 1 to 7, rotating mod 7 for subsequent days so tasks never stagnate)
+    day_cycle = ((day - 1) % 7) + 1
+
+    missions_by_track_and_day = {
         "sm": {
             1: "The Sensory Sunset: Enforce zero non-work screen time after 9:00 PM and place phone in another room.",
             2: "Friction Engineering: Convert phone display to Grayscale and remove social apps from the primary home screen.",
             3: "Deep Flow Block: Complete a 90-minute uninterrupted work or reading block with zero digital notifications.",
-            4: "Digital Minimalism Mastery: Conduct a full digital clutter audit and establish permanent sacred offline hours."
+            4: "Social Cue & Notification Quarantine: Batch all messaging into two 20-minute daily windows; disable all lock-screen previews.",
+            5: "Sensory Realignment: Take a 45-minute outdoor walk without headphones or device checks; practice somatic audio observation.",
+            6: "Digital Declutter Audit: Delete 5 unnecessary apps, unfollow dopamine-triggering accounts, and clear all browser tabs.",
+            7: "Weekly Milestone Reflection: Keep device in another room during all meals today; write a 1-page paper reflection on your cognitive clarity.",
         },
         "sa": {
             1: "The Oral Anchor: Replace every cigarette or drink urge with 5 slow sips of ice-cold water or a cinnamon stick.",
             2: "Trigger Circuit Breaker: Alter your typical evening habit loop; substitute post-dinner routine with a 15-minute brisk walk.",
             3: "Social Shield Inoculation: Practice saying 'I am in physiological training right now' when offered substances in social settings.",
-            4: "Identity Re-architecture: Celebrate your pulmonary and metabolic renewal; write a 1-page reflection on your reclaimed vitality."
+            4: "Vagus Nerve & Urge Surfing: When peak evening craving spikes, set a 5-minute timer and surf the urge with 4-7-8 diaphragmatic breathing.",
+            5: "Environment Purge: Remove all residual sensory triggers (ashtrays, lighters, bottles, bar glassware) completely from living spaces.",
+            6: "Endorphin Restoration: Complete a 30-minute steady-state cardiovascular session to stimulate natural endogenous dopamine.",
+            7: "Pulmonary Renewal Milestone: Take 10 deep belly breaths outdoors, noticing clean airway expansion; journal your physical vitality shifts.",
         },
         "gm": {
             1: "The Console Lockout: Power down gaming rigs completely and store controllers out of immediate arm's reach.",
             2: "Tactile Reality Quest: Dedicate 30 minutes to a real-world physical hobby, instrument, or hands-on craftsmanship.",
-            3: "Dopamine Recalibration: Complete your daily physical and dietary tasks before any leisure electronics are powered.",
-            4: "Master of Reality: Mentor or inspire another individual embarking on screen habit recalibration."
+            3: "Dopamine Threshold Reset: Zero gaming streaming content, gameplay videos, or forum browsing during work or study hours.",
+            4: "Friction Multiplier: Unplug gaming peripherals after each session and store them in a closed closet or distinct container.",
+            5: "Real-World Fellowship: Spend 45 minutes connecting with family or friends in person or via telephone outside of any virtual games.",
+            6: "Physical Exertion Quest: Channel hyper-focus into 40 minutes of rigorous athletic movement or functional resistance training.",
+            7: "Master of Reality Review: Audit your reclaimed hours from this week and allocate them toward a concrete real-world pursuit.",
         },
         "jf": {
             1: "The Pantry Purge: Clear all ultra-processed snacks from your immediate workspace and prep fresh cucumber/carrot sticks.",
             2: "Pre-Meal Hydration Protocol: Drink 400ml of water 15 minutes before lunch and dinner; chew each bite 20 times.",
             3: "Glycemic Shielding: Balance every carbohydrate serving with equal portions of fiber and protein to prevent craving dips.",
-            4: "Nutritional Intuition: Prepare an entire whole-food dinner from scratch, savoring each sensory aroma mindfully."
-        }
+            4: "Craving Deconstruction: When sugar cravings hit, drink 250ml water and wait 10 minutes; identify the underlying emotional fatigue trigger.",
+            5: "Whole-Food Culinary Art: Cook dinner completely from whole, unrefined ingredients with zero added industrial sugars or trans-fats.",
+            6: "Evening Sweet Tooth Extinction: Replace post-dinner snacking with a hot cup of spiced cinnamon-chamomile tea and 10 pages of reading.",
+            7: "Metabolic Autonomy Milestone: Notice the elimination of 3:00 PM energy crashes; write down your baseline digestive improvements.",
+        },
     }
 
-    special_mission = mission_map.get(track, {}).get(phase, f"Complete your Day {day} recovery protocols with full clinical compliance.")
+    track_missions = missions_by_track_and_day.get(track, {})
+    special_mission = track_missions.get(day_cycle, f"Day {day} Milestone: Complete your Phase {phase} recovery protocols with full clinical compliance.")
 
-    routine_tasks = [
-        f"Hydration Check: Complete {metrics.hydration_liters} Liters of water with pinch of electrolytes.",
-        f"Physical Movement: Complete your {metrics.phase_name.lower()} exercise session.",
-        f"Mindfulness Routine: 10 minutes of urge-surfing meditation & audio therapy.",
-        f"Special Track Mission: {special_mission[:60]}..."
-    ]
+    # Day-progressive rotating tasks (6 distinct tasks per day, evolving across the 7-day cycle)
+    tasks_by_track_and_day = {
+        "sm": {
+            1: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with morning electrolytes.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} exercise session ({metrics.target_calories} kcal fuel target).",
+                "Friction Setup: Turn off all non-human push notifications for social media applications.",
+                "Display Calibration: Switch mobile screen color profile to high-contrast Grayscale.",
+                "Circadian Sleep Hygiene: Place phone charging station completely outside the bedroom.",
+                "Neuro-Reset: 10 minutes of box-breathing & binaural audio therapy before evening rest.",
+            ],
+            2: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
+                f"Circadian Morning Light: 20-minute morning outdoor walk without looking at any screens.",
+                "Urge Touch Pause: Touch a physical object for 10 seconds before unlocking your device.",
+                "Home Screen Defense: Move communication apps to secondary folders off the home dock.",
+                "Digital Sunset Initiation: Power off or dock mobile phone 45 minutes prior to bedtime.",
+                "Neuro-Reset: 10 minutes of somatic nervous system down-regulation audio.",
+            ],
+            3: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with balanced meals.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} movement protocol ({metrics.target_calories} kcal target).",
+                "Deep Flow Block: Complete a 90-minute focused task with all notifications muted and phone in another room.",
+                "Notification Quarantine: Check messages only during two scheduled 15-minute daytime batches.",
+                "Evening Environment Friction: Read an analog book under warm light instead of scrolling.",
+                "Neuro-Reset: 12 minutes of 4-7-8 breathwork and calming 432Hz auditory stimulation.",
+            ],
+            4: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water across the day.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} cardiovascular/mobility session.",
+                "Friction Barrier: Log out of desktop social media portals and clear cached passwords.",
+                "Trigger Substitution: When reaching for phone out of boredom, do 10 deep diaphragmatic breaths.",
+                "Sacred Meal Space: Keep breakfast, lunch, and dinner entirely screen-free.",
+                "Neuro-Reset: 10 minutes of parasympathetic recovery breathing.",
+            ],
+            5: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with clean nutrition.",
+                f"Physical Movement: 30 minutes of low-impact walking or Zone 2 recovery.",
+                "Sensory Immersion: Spend 30 minutes in nature or physical contemplation without audio devices.",
+                "Micro-Break Hygiene: Replace screen checking between tasks with 2 minutes of spinal stretching.",
+                "Bedroom Sanctuary: Keep sleeping quarters 100% free of tablets, phones, and laptops.",
+                "Neuro-Reset: 10 minutes of vagus nerve decompression audio.",
+            ],
+            6: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with morning mineral pinch.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} exercise session.",
+                "App Quarantine Audit: Uninstall 3 non-essential entertainment or infinite-scroll apps.",
+                "Dopamine Cue Neutralization: Turn off auto-play on video and streaming platforms.",
+                "Evening Wind-Down: Replace pre-sleep phone browsing with 15 minutes of relaxing stretching.",
+                "Neuro-Reset: 10 minutes of guided craving mindfulness meditation.",
+            ],
+            7: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
+                f"Physical Movement: 25 minutes of restorative mobility and core stabilization.",
+                "Weekly Digital Audit: Review screen-time analytics and celebrate your reduced pickups.",
+                "Identity Anchoring: Write down 3 real-world goals achieved during this week's reclaimed hours.",
+                "Social Presence: Enjoy an uninterrupted conversation with a loved one with devices put away.",
+                "Neuro-Reset: 15 minutes of gratitude contemplation and deep rest binaural frequency.",
+            ],
+        },
+        "sa": {
+            1: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with morning electrolytes.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} aerobic exercise session.",
+                "Oral Substitution: Keep cold water, oral mints, or cinnamon sticks within immediate reach.",
+                "Trigger Circuit Breaker: Replace usual post-meal smoking/drinking cue with a 10-minute walk.",
+                "Craving Inoculation: Practice 5 minutes of mindful urge-surfing during peak evening craving spike.",
+                "Neuro-Reset: 10 minutes of vagus nerve decompression & non-visual relaxation audio.",
+            ],
+            2: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water to accelerate detoxification.",
+                f"Physical Movement: 20-minute morning light brisk walk to stimulate endogenous energy.",
+                "Kinetic Substitution: Squeeze a stress ball or use tactile hand fidgets when urge spikes.",
+                "Environment Quarantine: Avoid places or establishments associated with substance usage.",
+                "Evening Ritual Shift: Replace alcoholic drinks with sparkling mineral water with fresh lemon.",
+                "Neuro-Reset: 10 minutes of box-breathing to deactivate acute craving anxiety.",
+            ],
+            3: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with electrolyte replenishment.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} exercise protocol.",
+                "Social Boundary Practice: Rehearse refusing offers with 'I am taking a health reset break'.",
+                "Trigger Mapping: Write down the 2 most dangerous emotional triggers (stress/fatigue).",
+                "Caffeine Moderation: Cut caffeine after 2:00 PM to eliminate jitters that trigger craving loops.",
+                "Neuro-Reset: 12 minutes of autonomic calm meditation.",
+            ],
+            4: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with nutrient-dense meals.",
+                f"Physical Movement: 30 minutes of progressive aerobic activity.",
+                "Sensory Barrier: Thoroughly wash clothes and air out rooms previously exposed to smoke.",
+                "Urge Delay Rule: When an urge strikes, force a 15-minute delay and drink 300ml cold water.",
+                "Somatic Anchor: Rub an ice cube on your wrist during severe acute cravings to reset attention.",
+                "Neuro-Reset: 10 minutes of parasympathetic down-regulation audio.",
+            ],
+            5: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water across the day.",
+                f"Physical Movement: Strength and mobility session to build neuromuscular vitality.",
+                "Emergency Contact Check: Check in with a supportive friend or recovery partner.",
+                "Dopamine Nutrition: Eat meals rich in L-tyrosine (beans, nuts, whole oats) for dopamine support.",
+                "Evening Wind-Down: Take a warm shower followed by cold facial splash to soothe cravings.",
+                "Neuro-Reset: 10 minutes of alpha-wave binaural audio.",
+            ],
+            6: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with balanced meals.",
+                f"Physical Movement: 30 minutes of brisk outdoor walking or cycling.",
+                "Environment Defense: Remove all remaining alcohol, ashtrays, or paraphernalia from home.",
+                "Craving Observation: Journal the exact duration of any urge wave without giving in.",
+                "Evening Routine Substitution: Drink hot herbal tea while listening to soothing music.",
+                "Neuro-Reset: 10 minutes of physiological sigh breathwork.",
+            ],
+            7: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water to maintain cellular hydration.",
+                f"Physical Movement: 25 minutes of full-body restorative stretching and core work.",
+                "Milestone Assessment: Calculate financial savings and pulmonary capacity improvements.",
+                "Reward Reinforcement: Treat yourself to a non-substance healthy reward or special meal.",
+                "Affirmation Practice: Reaffirm your identity as a clean, healthy, and autonomous individual.",
+                "Neuro-Reset: 15 minutes of restful evening meditation.",
+            ],
+        },
+        "gm": {
+            1: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with morning electrolytes.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} exercise session.",
+                "Hardware Lockout: Disconnect gaming rigs and store controllers in a closed drawer.",
+                "Kinetic Substitution: Engage in 30 minutes of hands-on physical activity or analog reading.",
+                "Sensory Recalibration: No gaming streaming content or forums during daytime flow blocks.",
+                "Neuro-Reset: 10 minutes of nervous system down-regulation & binaural sound therapy.",
+            ],
+            2: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
+                f"Physical Movement: 25 minutes of outdoor walking or jogging to burn excess nervous energy.",
+                "Tactile Anchor: Spend 20 minutes learning an instrument, drawing, or solving physical puzzles.",
+                "Account Friction: Log out of gaming stores and disable promotional deal alerts.",
+                "Circadian Reset: Shut off computer displays 1 hour before sleep to restore melatonin.",
+                "Neuro-Reset: 10 minutes of box-breathing to soothe dopamine agitation.",
+            ],
+            3: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with balanced meals.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} workout protocol.",
+                "Real-World Level-Up: Complete 2 critical tasks on your work/study backlog before 4:00 PM.",
+                "Content Quarantine: Unsubscribe from gaming highlight channels and community discords.",
+                "Social Reconnection: Spend 30 minutes talking with friends or family outside gaming contexts.",
+                "Neuro-Reset: 12 minutes of calming 432Hz auditory meditation.",
+            ],
+            4: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water across the day.",
+                f"Physical Movement: 30 minutes of functional resistance training.",
+                "Spatial Separation: Relocate your desk so your computer is not associated with gaming posture.",
+                "Sensory Substitution: Listen to an audiobook or educational podcast during free time.",
+                "Urge Wave Surfing: When the desire to grind strikes, do 20 pushups and drink cold water.",
+                "Neuro-Reset: 10 minutes of guided vagus nerve stimulation audio.",
+            ],
+            5: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with nutritious meals.",
+                f"Physical Movement: 30 minutes of low-impact walking or cycling in fresh air.",
+                "Creative Quest: Write, sketch, or design something tangible for 30 minutes.",
+                "Digital Friction: Put parental/screen time lock on gaming apps with a random difficult password.",
+                "Evening Relaxation: Read 15 pages of fiction before sleep without any screens nearby.",
+                "Neuro-Reset: 10 minutes of mindfulness breathing meditation.",
+            ],
+            6: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} cardio session.",
+                "Desk Declutter: Organize your physical workspace, removing all gaming accessories.",
+                "Cognitive Reframe: Recognize gaming achievements as virtual pixels, redirecting drive to real life.",
+                "Sleep Sanctuary: Keep all monitors and bright LEDs turned off in your sleeping room.",
+                "Neuro-Reset: 10 minutes of progressive muscle relaxation.",
+            ],
+            7: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water to support nervous recovery.",
+                f"Physical Movement: 25 minutes of restorative mobility and stretching.",
+                "Milestone Review: Count how many real-world hours you reclaimed and invested this week.",
+                "Tangible Reward: Celebrate completing 7 days by engaging in a healthy outdoor activity.",
+                "Identity Strengthening: Reaffirm your mastery over your time and digital habits.",
+                "Neuro-Reset: 15 minutes of restful calm contemplation.",
+            ],
+        },
+        "jf": {
+            1: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water, with 300ml taken 15 mins before meals.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} exercise session to stabilize glucose.",
+                "Pantry Defense: Remove ultra-processed trigger foods from immediate desk and living space.",
+                "Glycemic Shielding: Pair any complex carbohydrates with high-fiber greens and lean protein.",
+                "Mindful Ingestion: Chew each mouthful 20 times and pause halfway through every meal.",
+                "Neuro-Reset: 10 minutes of parasympathetic breathwork to neutralize emotional cravings.",
+            ],
+            2: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with a pinch of salt in morning.",
+                f"Physical Movement: 20-minute post-meal walk to prevent blood glucose spikes.",
+                "Trigger Food Replacement: Stock fridge with sliced bell peppers, carrots, and roasted almonds.",
+                "Sugar Urge Pause: When craving sweets, drink 300ml water and wait 10 full minutes.",
+                "Nighttime Kitchen Curfew: Close the kitchen 2 hours prior to sleep; drink warm water.",
+                "Neuro-Reset: 10 minutes of diaphragmatic breathing to curb stress cortisol.",
+            ],
+            3: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with balanced meals.",
+                f"Physical Movement: Complete your {metrics.phase_name.lower()} movement protocol ({metrics.target_calories} kcal target).",
+                "Sugar-Free Beverage Rule: Strictly zero sodas, sweet juices, or energy drinks today.",
+                "Meal Planning Defense: Prepare tomorrow's healthy snacks in advance to avoid impulsive buys.",
+                "Somatic Hunger Check: Ask: 'Am I biologically hungry or emotionally exhausted/bored?'",
+                "Neuro-Reset: 12 minutes of mindful eating meditation.",
+            ],
+            4: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water across the day.",
+                f"Physical Movement: 30 minutes of steady Zone 2 cardiovascular movement.",
+                "Delivery App Purge: Uninstall food delivery apps or turn off all food discount notifications.",
+                "Whole-Food Anchor: Ensure at least 70% of each meal plate consists of raw or steamed vegetables.",
+                "Evening Cravings Substitute: Sip cinnamon herbal tea when after-dinner sweet urges strike.",
+                "Neuro-Reset: 10 minutes of autonomic soothing audio.",
+            ],
+            5: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with nutritious meals.",
+                f"Physical Movement: 30 minutes of functional resistance exercise.",
+                "Grocery Defense: Never shop while hungry; stick strictly to a pre-written whole-food list.",
+                "Mindful Texture Savoring: Eat one meal in complete silence, appreciating the natural flavors.",
+                "Salt & Fat Balance: Use natural spices, herbs, and lemon instead of processed sauces.",
+                "Neuro-Reset: 10 minutes of guided vagus nerve relaxation.",
+            ],
+            6: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
+                f"Physical Movement: 25 minutes of brisk walking or light jogging.",
+                "Label Scrutiny: Inspect food labels today and reject anything containing high-fructose corn syrup.",
+                "Emotional Dopamine Switch: Replace sugary comfort treats with a hot bath or favorite book.",
+                "Sleep Protection: Go to bed on a light stomach to facilitate deep cellular repair.",
+                "Neuro-Reset: 10 minutes of progressive muscle relaxation.",
+            ],
+            7: [
+                f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with morning mineral hydration.",
+                f"Physical Movement: 25 minutes of gentle full-body mobility and core stretching.",
+                "Metabolic Milestone: Celebrate the reduction of afternoon lethargy and sugar brain fog.",
+                "Culinary Victory: Cook a delicious, colorful, whole-food dish to honor your body.",
+                "Long-Term Commitment: Reaffirm your commitment to nourishing your brain with real food.",
+                "Neuro-Reset: 15 minutes of restful gratitude meditation.",
+            ],
+        },
+    }
+
+    track_tasks_map = tasks_by_track_and_day.get(track, {})
+    routine_tasks = track_tasks_map.get(day_cycle, [
+        f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with electrolytes.",
+        f"Physical Movement: Complete your {metrics.phase_name.lower()} exercise session ({metrics.target_calories} kcal target).",
+        f"Day {day} Milestone: Implement high-friction barrier habit against track triggers.",
+        "Nutrition Adherence: Maintain whole-food meals aligned with target metabolic balance.",
+        "Craving Surfing: Practice 5-10 minutes of somatic mindfulness when urges arise.",
+        "Sleep Inoculation: Complete evening recovery relaxation 45 minutes prior to rest.",
+    ])
 
     why_this_works = (
         f"In {metrics.phase_name} (Day {day}), your mesolimbic dopamine pathways are undergoing "
-        f"homeostatic recalibration. Combining structured caloric intake ({metrics.target_calories} kcal), "
+        f"progressive neuroplastic recalibration. Combining structured caloric intake ({metrics.target_calories} kcal), "
         f"steady hydration, and deliberate cue-replacement creates new inhibitory neural pathways in the prefrontal cortex, "
         f"permanently reducing craving intensity."
     )
@@ -305,7 +560,7 @@ def _generate_fallback_prescription(biometrics: BiometricInput) -> PrescriptionR
 
     return PrescriptionResponse(
         track=biometrics.track,
-        day_number=biometrics.day_number,
+        day_number=biometrics.get_effective_day(),
         phase=metrics.phase,
         phase_name=metrics.phase_name,
         computed_metrics=metrics,
@@ -375,7 +630,14 @@ def generate_daily_prescription(biometrics: BiometricInput) -> PrescriptionRespo
         return _generate_fallback_prescription(biometrics)
 
     try:
-        client = genai.Client(api_key=api_key)
+        http_opts = None
+        if hasattr(types, "HttpOptions") and hasattr(types, "HttpRetryOptions"):
+            try:
+                http_opts = types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))
+            except Exception:
+                http_opts = None
+
+        client = genai.Client(api_key=api_key, http_options=http_opts) if http_opts else genai.Client(api_key=api_key)
 
         prompt = f"""
 You are the Chief Clinical Officer of NIVARAN, a medical-grade mind-growth and recovery AI platform.
@@ -409,9 +671,10 @@ CLINICAL GUARDRAILS (STRICT COMPLIANCE MANDATORY):
 - Safety Warnings: {json.dumps(guardrails['safety_warnings'])}
 - Recommended Workout Duration: {guardrails['recommended_workout_duration']} mins
 
-PRESCRIPTION DIRECTIVES:
-1. Special Mission: Provide a concrete, highly targeted 1-2 sentence core challenge countering one of the user's highest diagnostic weak spots (e.g. morning reflex, late-night screen, stress escapism) calibrated to {severity_level} intensity.
-2. Routine Tasks: Provide 4-5 actionable daily checkbox habits. At least 2 tasks MUST directly disrupt their identified diagnostic triggers.
+PRESCRIPTION DIRECTIVES FOR DAY {effective_day} (MILESTONE {effective_day}/{target_days}):
+1. Progressive Day Milestone: This prescription is specifically for Day {effective_day}. Do NOT repeat generic Day 1 or Day 2 stabilization tasks if effective_day >= 3. Advance the difficulty and neuroplastic depth appropriate for Day {effective_day} (Phase {metrics.phase}: {metrics.phase_name}).
+2. Special Mission: Provide a concrete, highly targeted 1-2 sentence core challenge specifically for Day {effective_day} countering one of the user's highest diagnostic weak spots calibrated to {severity_level} intensity.
+3. Routine Tasks: Provide EXACTLY 6 distinct, progressive daily checkbox habits (#1 through #6) reflecting advanced recovery milestones for Day {effective_day}. DO NOT duplicate the Special Mission inside the routine tasks list.
 3. Nutrition Plan: Respect the {metrics.target_calories} kcal target, {metrics.hydration_liters}L hydration, dietary preference ({biometrics.dietary_preference}), and medical flags.
 4. Movement Protocol: Adhere strictly to the {guardrails['recommended_workout_duration']}-min duration and {guardrails['allowed_intensity']} limit.
 5. Neuro Reset: Provide vagus nerve / mindfulness regulation and audio focus cues.
@@ -421,7 +684,12 @@ Output a single valid JSON object strictly matching this schema:
 {{
   "special_mission": "1-2 sentence core daily behavioral challenge addressing the recovery track, timeline, and weak spots.",
   "routine_tasks": [
-    "4-5 actionable habit tasks for the day"
+    "Task 1: Morning hydration or physiological anchor",
+    "Task 2: Physical movement / exercise protocol",
+    "Task 3: Track-specific environmental or friction barrier habit",
+    "Task 4: Track-specific cue disruption or substitution habit",
+    "Task 5: Mindful urge-surfing or emotional stabilization habit",
+    "Task 6: Evening recovery or circadian sleep hygiene habit"
   ],
   "nutrition_plan": {{
     "short_summary": "{biometrics.dietary_preference.title()} Neuro-Recovery Nutrition ({metrics.target_calories} kcal, {metrics.hydration_liters}L water)",
@@ -456,7 +724,22 @@ Output a single valid JSON object strictly matching this schema:
 }}
 """
 
-        # Try candidate models
+        # Low-latency configuration for Gemini API
+        thinking_cfg = None
+        if hasattr(types, "ThinkingConfig"):
+            try:
+                thinking_cfg = types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                thinking_cfg = None
+
+        gen_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.2,
+            max_output_tokens=1200,
+            thinking_config=thinking_cfg,
+        )
+
+        # Try candidate models with gemini-2.5-flash prioritizing low latency
         candidate_models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
         response = None
         for model_name in candidate_models:
@@ -464,11 +747,10 @@ Output a single valid JSON object strictly matching this schema:
                 response = client.models.generate_content(
                     model=model_name,
                     contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                    )
+                    config=gen_config,
                 )
                 if response and response.text:
+                    logger.info(f"Gemini prescription generated successfully with model: {model_name}")
                     break
             except Exception as model_err:
                 logger.warning(f"Gemini model {model_name} failed: {model_err}; trying fallback model...")
@@ -535,16 +817,30 @@ Output a single valid JSON object strictly matching this schema:
                 lifestyle_tip=mental_data.get("lifestyle_tip", "Keep your sleeping sanctuary completely device-free.")
             )
 
-            # Routine tasks (4-5 items)
-            routine_tasks = data.get("routine_tasks", [])
-            if not isinstance(routine_tasks, list) or len(routine_tasks) < 3:
-                fallback_mission, fallback_tasks, _ = _build_deterministic_missions(biometrics, metrics)
-                routine_tasks = fallback_tasks
+            fallback_mission, fallback_tasks, _ = _build_deterministic_missions(biometrics, metrics)
 
             special_mission = data.get("special_mission")
-            if not special_mission or len(special_mission.strip()) < 10:
-                fallback_mission, _, _ = _build_deterministic_missions(biometrics, metrics)
+            if not special_mission or len(str(special_mission).strip()) < 10:
                 special_mission = fallback_mission
+
+            # Exact 6 distinct normal routine tasks (#1 through #6), never duplicating special_mission
+            raw_tasks = data.get("routine_tasks", [])
+            valid_tasks: List[str] = []
+            if isinstance(raw_tasks, list):
+                for t in raw_tasks:
+                    if isinstance(t, str) and t.strip():
+                        t_clean = t.strip()
+                        if t_clean.lower() != special_mission.strip().lower() and t_clean not in valid_tasks:
+                            valid_tasks.append(t_clean)
+
+            # Pad from fallback_tasks if needed to guarantee exactly 6 distinct tasks
+            for ft in fallback_tasks:
+                if len(valid_tasks) >= 6:
+                    break
+                if ft not in valid_tasks and ft.lower() != special_mission.strip().lower():
+                    valid_tasks.append(ft)
+
+            routine_tasks = valid_tasks[:6]
 
             why_this_works = data.get("why_this_works") or (
                 f"In {metrics.phase_name} (Day {biometrics.day_number}), structured nutrition ({metrics.target_calories} kcal) "
@@ -553,7 +849,7 @@ Output a single valid JSON object strictly matching this schema:
 
             return PrescriptionResponse(
                 track=biometrics.track,
-                day_number=biometrics.day_number,
+                day_number=effective_day,
                 phase=metrics.phase,
                 phase_name=metrics.phase_name,
                 computed_metrics=metrics,

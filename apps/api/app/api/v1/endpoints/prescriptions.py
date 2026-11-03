@@ -16,6 +16,9 @@ from app.core.database import get_supabase_client
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Fast in-memory cache to return stored daily prescriptions immediately (<50ms)
+_DAILY_PRESCRIPTION_CACHE: dict[str, PrescriptionResponse] = {}
+
 
 def _is_valid_uuid(val: Optional[str]) -> bool:
     if not val:
@@ -42,21 +45,29 @@ def _to_dict(val: Any) -> dict[str, Any]:
 
 
 @router.post("/generate", response_model=PrescriptionResponse, status_code=status.HTTP_200_OK)
-async def generate_prescription(biometrics: BiometricInput):
+async def generate_prescription(
+    biometrics: BiometricInput,
+    force_refresh: bool = False
+):
     """
     Generates or retrieves a personalized clinical daily prescription:
-    1. If a valid user_id, track, and day are provided, queries Supabase daily_prescriptions first.
-    2. If a cached prescription exists, returns it directly (avoids redundant Gemini calls).
-    3. If not cached, generates via Gemini AI synthesizer pipeline (with deterministic fallback).
-    4. Upserts the generated prescription into Supabase daily_prescriptions.
+    1. If force_refresh is False, checks in-memory cache and Supabase daily_prescriptions.
+    2. If force_refresh is True or not cached, generates via Gemini AI synthesizer pipeline.
+    3. Upserts the generated prescription into Supabase daily_prescriptions.
     """
     try:
         supabase = get_supabase_client()
         has_valid_user = _is_valid_uuid(biometrics.user_id)
         effective_day = biometrics.get_effective_day()
+        cache_key = f"{biometrics.user_id or 'guest'}_{biometrics.track}_{effective_day}"
 
-        # 1. Check cache in Supabase daily_prescriptions
-        if supabase and has_valid_user:
+        # 0. Check fast in-memory cache (<50ms) if force_refresh is not requested
+        if not force_refresh and cache_key in _DAILY_PRESCRIPTION_CACHE:
+            logger.info(f"Memory cache hit: returning existing prescription for {cache_key}")
+            return _DAILY_PRESCRIPTION_CACHE[cache_key]
+
+        # 1. Check cache in Supabase daily_prescriptions if force_refresh is not requested
+        if not force_refresh and supabase and has_valid_user:
             try:
                 cached = (
                     supabase.table("daily_prescriptions")
@@ -74,7 +85,7 @@ async def generate_prescription(biometrics: BiometricInput):
                         f"track {biometrics.track}, day {effective_day}"
                     )
                     metrics = compute_all_metrics(biometrics)
-                    return PrescriptionResponse(
+                    cached_rx = PrescriptionResponse(
                         track=row["track"],
                         day_number=row["day_number"],
                         phase=row["phase"],
@@ -90,11 +101,14 @@ async def generate_prescription(biometrics: BiometricInput):
                             f"and metabolic balance stimulate neuroplastic dopamine normalization."
                         ),
                     )
+                    _DAILY_PRESCRIPTION_CACHE[cache_key] = cached_rx
+                    return cached_rx
             except Exception as cache_err:
                 logger.warning(f"Failed to query daily_prescriptions cache: {cache_err}")
 
         # 2. Generate prescription via Gemini AI synthesizer (or deterministic clinical fallback)
         prescription = generate_daily_prescription(biometrics)
+        _DAILY_PRESCRIPTION_CACHE[cache_key] = prescription
 
         # 3. Persist prescription to Supabase daily_prescriptions
         if supabase and has_valid_user:
@@ -157,6 +171,8 @@ async def recalculate_profile(biometrics: BiometricInput):
 
         # Regenerate updated prescription
         prescription = generate_daily_prescription(biometrics)
+        cache_key = f"{biometrics.user_id or 'guest'}_{biometrics.track}_{biometrics.get_effective_day()}"
+        _DAILY_PRESCRIPTION_CACHE[cache_key] = prescription
 
         # Upsert refreshed prescription
         if supabase and has_valid_user:
