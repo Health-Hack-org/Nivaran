@@ -44,9 +44,14 @@ export function isValidUuid(val?: string | null): boolean {
  * to guarantee compatibility with public.profiles table schema.
  */
 export function sanitizeProfileForDb(profile: Partial<UserProfile>) {
+  // If no custom username provided, generate unique fallback with user id suffix to prevent profiles_username_key constraint error
+  const suffix = profile.id ? profile.id.replace(/-/g, "").slice(0, 4) : "";
+  const defaultName = suffix ? `Seeker_${suffix}` : "Seeker";
+  const finalUsername = profile.username && profile.username.trim() !== "" ? profile.username.trim() : defaultName;
+
   return {
     id: profile.id,
-    username: profile.username || "Seeker",
+    username: finalUsername,
     gender: profile.gender || "male",
     age: Number(profile.age) || 24,
     height_cm: Number(profile.height_cm) || 175,
@@ -65,7 +70,7 @@ export function sanitizeProfileForDb(profile: Partial<UserProfile>) {
  * Prepares track_progress rows for Supabase upsert
  */
 export function sanitizeTrackProgressForDb(progress: Partial<TrackProgress>) {
-  const row: Record<string, any> = {
+  return {
     user_id: progress.user_id,
     track: progress.track,
     current_day: progress.current_day || 1,
@@ -73,9 +78,4 @@ export function sanitizeTrackProgressForDb(progress: Partial<TrackProgress>) {
     shields: progress.shields ?? 1,
     updated_at: new Date().toISOString(),
   };
-  if (progress.severity_score !== undefined) row.severity_score = progress.severity_score;
-  if (progress.severity_level !== undefined) row.severity_level = progress.severity_level;
-  if (progress.target_days !== undefined) row.target_days = progress.target_days;
-  if (progress.survey_responses !== undefined) row.survey_responses = progress.survey_responses;
-  return row;
 }

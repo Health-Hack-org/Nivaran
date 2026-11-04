@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Smartphone,
   Cigarette,
@@ -51,8 +51,10 @@ const navLinks = [
   { id: "safety", label: "Safety" },
 ];
 
-export default function ExplorePage() {
+function ExploreContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromDashboard = searchParams.get("from") === "dashboard";
 
   // Active navigation anchor
   const [activeSection, setActiveSection] = useState("about");
@@ -84,17 +86,14 @@ export default function ExplorePage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
-  // Conditional dashboard button: only true if authenticated user has active row in track_progress
-  const [hasActiveTrackProgress, setHasActiveTrackProgress] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const trk = localStorage.getItem("nivaran_track_progress");
-        const all = localStorage.getItem("nivaran_all_tracks_progress");
-        if (trk || all) return true;
-      } catch {}
-    }
-    return false;
-  });
+  // Hydration-safe mount flag
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Active recovery indicator
+  const [hasActiveTrackProgress, setHasActiveTrackProgress] = useState(false);
+
+  // Only show Return to Dashboard if user has active recovery AND arrived explicitly from the dashboard
+  const showDashboardReturn = isMounted && hasActiveTrackProgress && fromDashboard;
 
   // Helper: profile fresh check (updated within past 30 days)
   const isProfileFresh = (prof: UserProfile | null): boolean => {
@@ -105,6 +104,8 @@ export default function ExplorePage() {
   };
 
   useEffect(() => {
+    setIsMounted(true);
+
     async function checkCurrentSession() {
       if (typeof window === "undefined") return;
 
@@ -307,8 +308,15 @@ export default function ExplorePage() {
 
       if (supabase && isSupabaseConfigured() && activeUser?.id && isValidUuid(activeUser.id)) {
         try {
-          const dbProfile = sanitizeProfileForDb(profileData);
-          await supabase.from("profiles").upsert(dbProfile);
+          const dbProfile = sanitizeProfileForDb({
+            ...profileData,
+            id: activeUser.id,
+          });
+          let { error: profErr } = await supabase.from("profiles").upsert(dbProfile);
+          if (profErr && (profErr.code === "23505" || profErr.message?.includes("username") || (profErr as any).details?.includes("username"))) {
+            const fallbackUsername = `${profileData.username || "Seeker"}_${activeUser.id.replace(/-/g, "").slice(0, 4)}`;
+            await supabase.from("profiles").upsert({ ...dbProfile, username: fallbackUsername });
+          }
         } catch (dbErr) {
           console.warn("Supabase profile upsert warning:", dbErr);
         }
@@ -397,13 +405,23 @@ export default function ExplorePage() {
       // 1. Upsert profile and track_progress into Supabase
       if (supabase && isSupabaseConfigured() && activeUser?.id && isValidUuid(activeUser.id)) {
         try {
-          await supabase.from("profiles").upsert(
-            sanitizeProfileForDb({
-              ...profile,
-              active_track: selectedTrack,
-              updated_at: new Date().toISOString(),
-            })
-          );
+          const dbProfile = sanitizeProfileForDb({
+            ...profile,
+            id: activeUser.id,
+            active_track: selectedTrack,
+            updated_at: new Date().toISOString(),
+          });
+
+          let { error: profErr } = await supabase.from("profiles").upsert(dbProfile);
+          if (profErr && (profErr.code === "23505" || profErr.message?.includes("username") || (profErr as any).details?.includes("username"))) {
+            const fallbackUsername = `${profile.username || "Seeker"}_${activeUser.id.replace(/-/g, "").slice(0, 4)}`;
+            const retryRes = await supabase.from("profiles").upsert({ ...dbProfile, username: fallbackUsername });
+            profErr = retryRes.error;
+          }
+
+          if (profErr) {
+            console.warn("Profile upsert warning:", profErr);
+          }
 
           const dbTrack = sanitizeTrackProgressForDb({
             user_id: activeUser.id,
@@ -411,15 +429,15 @@ export default function ExplorePage() {
             current_day: 1,
             streak: 0,
             shields: 1,
-            severity_score: diagnosticResult.severityScore,
-            severity_level: diagnosticResult.severityLevel,
-            target_days: diagnosticResult.targetDays,
-            survey_responses: diagnosticResult.surveyResponses,
           });
 
-          await supabase.from("track_progress").upsert(dbTrack, {
+          const { error: trkErr } = await supabase.from("track_progress").upsert(dbTrack, {
             onConflict: "user_id,track",
           });
+
+          if (trkErr) {
+            console.warn("Track progress upsert warning:", trkErr);
+          }
         } catch (dbErr) {
           console.warn("Supabase upsert warning:", dbErr);
         }
@@ -661,29 +679,28 @@ export default function ExplorePage() {
           <div className="flex items-center gap-3 flex-shrink-0">
             <ThemeToggle />
 
-            {hasActiveTrackProgress ? (
-              <Link href="/dashboard" className="text-decoration-none">
-                <SpecularButton
-                  size="md"
-                  radius={12}
-                  tint="#8C6A4F"
-                  baseColor="#73543B"
-                  lineColor="#FFFFFF"
-                  textColor="#FFFFFF"
-                  intensity={1.25}
-                  idleIntensity={0.4}
-                  shineSize={14}
-                  shineFade={36}
-                  thickness={1.4}
-                  glow={1}
-                  followMouse={true}
-                  proximity={250}
-                  className="h-10 px-5 text-sm font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
-                >
-                  <span>Return to Dashboard</span>
-                  <ArrowRight className="w-4 h-4 text-white shrink-0" />
-                </SpecularButton>
-              </Link>
+            {showDashboardReturn ? (
+              <SpecularButton
+                size="md"
+                radius={12}
+                tint="#8C6A4F"
+                baseColor="#73543B"
+                lineColor="#FFFFFF"
+                textColor="#FFFFFF"
+                intensity={1.25}
+                idleIntensity={0.4}
+                shineSize={14}
+                shineFade={36}
+                thickness={1.4}
+                glow={1}
+                followMouse={true}
+                proximity={250}
+                onClick={() => router.push("/dashboard")}
+                className="h-10 px-5 text-sm font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
+              >
+                <span>Return to Dashboard</span>
+                <ArrowRight className="w-4 h-4 text-white shrink-0" />
+              </SpecularButton>
             ) : (
               <SpecularButton
                 size="md"
@@ -825,20 +842,21 @@ export default function ExplorePage() {
                   </div>
 
                   <div className="pt-4 mt-4 border-t border-[#EAE5DE]">
-                    {hasActiveTrackProgress && (userProfile?.active_track === t.id || selectedTrack === t.id) ? (
-                      <Link
-                        href="/dashboard"
-                        className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer shadow-xs bg-[#8C6A4F] hover:bg-[#73543B] active:scale-95 flex items-center justify-center gap-1.5 text-decoration-none"
+                    {showDashboardReturn && (userProfile?.active_track === t.id || selectedTrack === t.id) ? (
+                      <button
+                        type="button"
+                        onClick={() => router.push("/dashboard")}
+                        className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer shadow-xs bg-[#8C6A4F] hover:bg-[#73543B] active:scale-95 flex items-center justify-center gap-1.5"
                       >
                         <span>Continue in Dashboard</span>
                         <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
+                      </button>
                     ) : (
                       <button
                         onClick={() => handleOpenModal(t.id)}
                         className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer shadow-xs bg-[#8C6A4F] hover:bg-[#73543B] active:scale-95 flex items-center justify-center gap-1.5"
                       >
-                        <span>{hasActiveTrackProgress ? "Switch to this Track" : "Select Your Track"}</span>
+                        <span>{showDashboardReturn ? "Switch to this Track" : "Select Your Track"}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -910,37 +928,36 @@ export default function ExplorePage() {
         {/* 5. BOTTOM CTA */}
         <section className="relative z-10 bg-white rounded-2xl p-8 sm:p-12 border border-[#EAE5DE] shadow-xs text-center space-y-4">
           <h2 className="text-2xl sm:text-3xl font-black text-[#2D221A] tracking-tight">
-            {hasActiveTrackProgress ? "Your Recovery is in Progress" : "Ready to Begin?"}
+            {showDashboardReturn ? "Your Recovery is in Progress" : "Ready to Begin?"}
           </h2>
           <p className="max-w-md mx-auto text-sm text-[#6E5D52]">
-            {hasActiveTrackProgress
+            {showDashboardReturn
               ? "Continue your daily missions, mindful routines, and streak milestones in your sanctuary."
               : "Start your personalized recovery journey today."}
           </p>
           <div className="pt-2 flex justify-center">
-            {hasActiveTrackProgress ? (
-              <Link href="/dashboard" className="text-decoration-none">
-                <SpecularButton
-                  size="lg"
-                  radius={12}
-                  tint="#8C6A4F"
-                  baseColor="#73543B"
-                  lineColor="#FFFFFF"
-                  textColor="#FFFFFF"
-                  intensity={1.25}
-                  idleIntensity={0.45}
-                  shineSize={16}
-                  shineFade={36}
-                  thickness={1.5}
-                  glow={1}
-                  followMouse={true}
-                  proximity={250}
-                  className="px-8 py-3.5 text-base font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
-                >
-                  <span>Return to Your Dashboard</span>
-                  <ArrowRight className="w-4 h-4 text-white shrink-0" />
-                </SpecularButton>
-              </Link>
+            {showDashboardReturn ? (
+              <SpecularButton
+                size="lg"
+                radius={12}
+                tint="#8C6A4F"
+                baseColor="#73543B"
+                lineColor="#FFFFFF"
+                textColor="#FFFFFF"
+                intensity={1.25}
+                idleIntensity={0.45}
+                shineSize={16}
+                shineFade={36}
+                thickness={1.5}
+                glow={1}
+                followMouse={true}
+                proximity={250}
+                onClick={() => router.push("/dashboard")}
+                className="px-8 py-3.5 text-base font-semibold active:scale-95 cursor-pointer inline-flex items-center gap-2 transition-transform"
+              >
+                <span>Return to Your Dashboard</span>
+                <ArrowRight className="w-4 h-4 text-white shrink-0" />
+              </SpecularButton>
             ) : (
               <SpecularButton
                 size="lg"
@@ -1535,5 +1552,19 @@ export default function ExplorePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ExplorePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#FDFBF7]">
+          <div className="text-[#8C6A4F] font-semibold text-sm">Loading NIVARAN Protocols...</div>
+        </div>
+      }
+    >
+      <ExploreContent />
+    </Suspense>
   );
 }

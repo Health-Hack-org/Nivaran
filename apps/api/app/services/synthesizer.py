@@ -60,15 +60,16 @@ def fetch_recent_urge_triggers_from_db(user_id: Optional[str], track: str) -> Li
                 .limit(5)
                 .execute()
             )
-            if res.data:
-                triggers = []
+            if res.data and isinstance(res.data, list):
+                triggers: List[str] = []
                 for row in res.data:
-                    trigger_str = row.get("trigger_type", "Unknown")
-                    intensity = row.get("intensity")
-                    if intensity:
-                        triggers.append(f"{trigger_str} (intensity {intensity}/10)")
-                    else:
-                        triggers.append(trigger_str)
+                    if isinstance(row, dict):
+                        trigger_str = str(row.get("trigger_type", "Unknown"))
+                        intensity = row.get("intensity")
+                        if intensity is not None:
+                            triggers.append(f"{trigger_str} (intensity {intensity}/10)")
+                        else:
+                            triggers.append(trigger_str)
                 return triggers
     except Exception as e:
         logger.warning(f"Failed to query recent urge logs from Supabase: {e}")
@@ -132,8 +133,8 @@ def _build_deterministic_diet(
     # 5. Clinical rationale
     rationale = (
         f"Calorie target set at {metrics.target_calories} kcal (TDEE: {metrics.tdee} kcal). "
-        f"Micronutrient-dense complex carbohydrates stabilize baseline dopamine production and "
-        f"prevent post-prandial blood sugar crashes that trigger addictive craving spikes."
+        "Micronutrient-dense complex carbohydrates stabilize baseline dopamine production and "
+        "prevent post-prandial blood sugar crashes that trigger addictive craving spikes."
     )
 
     return DietProtocol(
@@ -243,7 +244,7 @@ def _build_deterministic_missions(
 ) -> tuple[str, List[str], str]:
     """Generates track-specific and day-progressive daily missions, tasks, and scientific rationale."""
     day = biometrics.get_effective_day()
-    target_days = getattr(biometrics, "target_days", 28) or 28
+    _target_days = getattr(biometrics, "target_days", 28) or 28  # noqa: F841
     phase = metrics.phase
     track = biometrics.track
 
@@ -305,7 +306,7 @@ def _build_deterministic_missions(
             ],
             2: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
-                f"Circadian Morning Light: 20-minute morning outdoor walk without looking at any screens.",
+                "Circadian Morning Light: 20-minute morning outdoor walk without looking at any screens.",
                 "Urge Touch Pause: Touch a physical object for 10 seconds before unlocking your device.",
                 "Home Screen Defense: Move communication apps to secondary folders off the home dock.",
                 "Digital Sunset Initiation: Power off or dock mobile phone 45 minutes prior to bedtime.",
@@ -329,7 +330,7 @@ def _build_deterministic_missions(
             ],
             5: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with clean nutrition.",
-                f"Physical Movement: 30 minutes of low-impact walking or Zone 2 recovery.",
+                "Physical Movement: 30 minutes of low-impact walking or Zone 2 recovery.",
                 "Sensory Immersion: Spend 30 minutes in nature or physical contemplation without audio devices.",
                 "Micro-Break Hygiene: Replace screen checking between tasks with 2 minutes of spinal stretching.",
                 "Bedroom Sanctuary: Keep sleeping quarters 100% free of tablets, phones, and laptops.",
@@ -345,7 +346,7 @@ def _build_deterministic_missions(
             ],
             7: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
-                f"Physical Movement: 25 minutes of restorative mobility and core stabilization.",
+                "Physical Movement: 25 minutes of restorative mobility and core stabilization.",
                 "Weekly Digital Audit: Review screen-time analytics and celebrate your reduced pickups.",
                 "Identity Anchoring: Write down 3 real-world goals achieved during this week's reclaimed hours.",
                 "Social Presence: Enjoy an uninterrupted conversation with a loved one with devices put away.",
@@ -363,7 +364,7 @@ def _build_deterministic_missions(
             ],
             2: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water to accelerate detoxification.",
-                f"Physical Movement: 20-minute morning light brisk walk to stimulate endogenous energy.",
+                "Physical Movement: 20-minute morning light brisk walk to stimulate endogenous energy.",
                 "Kinetic Substitution: Squeeze a stress ball or use tactile hand fidgets when urge spikes.",
                 "Environment Quarantine: Avoid places or establishments associated with substance usage.",
                 "Evening Ritual Shift: Replace alcoholic drinks with sparkling mineral water with fresh lemon.",
@@ -379,7 +380,7 @@ def _build_deterministic_missions(
             ],
             4: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with nutrient-dense meals.",
-                f"Physical Movement: 30 minutes of progressive aerobic activity.",
+                "Physical Movement: 30 minutes of progressive aerobic activity.",
                 "Sensory Barrier: Thoroughly wash clothes and air out rooms previously exposed to smoke.",
                 "Urge Delay Rule: When an urge strikes, force a 15-minute delay and drink 300ml cold water.",
                 "Somatic Anchor: Rub an ice cube on your wrist during severe acute cravings to reset attention.",
@@ -387,7 +388,7 @@ def _build_deterministic_missions(
             ],
             5: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water across the day.",
-                f"Physical Movement: Strength and mobility session to build neuromuscular vitality.",
+                "Physical Movement: Strength and mobility session to build neuromuscular vitality.",
                 "Emergency Contact Check: Check in with a supportive friend or recovery partner.",
                 "Dopamine Nutrition: Eat meals rich in L-tyrosine (beans, nuts, whole oats) for dopamine support.",
                 "Evening Wind-Down: Take a warm shower followed by cold facial splash to soothe cravings.",
@@ -395,7 +396,7 @@ def _build_deterministic_missions(
             ],
             6: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with balanced meals.",
-                f"Physical Movement: 30 minutes of brisk outdoor walking or cycling.",
+                "Physical Movement: 30 minutes of brisk outdoor walking or cycling.",
                 "Environment Defense: Remove all remaining alcohol, ashtrays, or paraphernalia from home.",
                 "Craving Observation: Journal the exact duration of any urge wave without giving in.",
                 "Evening Routine Substitution: Drink hot herbal tea while listening to soothing music.",
@@ -403,7 +404,7 @@ def _build_deterministic_missions(
             ],
             7: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water to maintain cellular hydration.",
-                f"Physical Movement: 25 minutes of full-body restorative stretching and core work.",
+                "Physical Movement: 25 minutes of full-body restorative stretching and core work.",
                 "Milestone Assessment: Calculate financial savings and pulmonary capacity improvements.",
                 "Reward Reinforcement: Treat yourself to a non-substance healthy reward or special meal.",
                 "Affirmation Practice: Reaffirm your identity as a clean, healthy, and autonomous individual.",
@@ -421,7 +422,7 @@ def _build_deterministic_missions(
             ],
             2: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
-                f"Physical Movement: 25 minutes of outdoor walking or jogging to burn excess nervous energy.",
+                "Physical Movement: 25 minutes of outdoor walking or jogging to burn excess nervous energy.",
                 "Tactile Anchor: Spend 20 minutes learning an instrument, drawing, or solving physical puzzles.",
                 "Account Friction: Log out of gaming stores and disable promotional deal alerts.",
                 "Circadian Reset: Shut off computer displays 1 hour before sleep to restore melatonin.",
@@ -437,7 +438,7 @@ def _build_deterministic_missions(
             ],
             4: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water across the day.",
-                f"Physical Movement: 30 minutes of functional resistance training.",
+                "Physical Movement: 30 minutes of functional resistance training.",
                 "Spatial Separation: Relocate your desk so your computer is not associated with gaming posture.",
                 "Sensory Substitution: Listen to an audiobook or educational podcast during free time.",
                 "Urge Wave Surfing: When the desire to grind strikes, do 20 pushups and drink cold water.",
@@ -445,7 +446,7 @@ def _build_deterministic_missions(
             ],
             5: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with nutritious meals.",
-                f"Physical Movement: 30 minutes of low-impact walking or cycling in fresh air.",
+                "Physical Movement: 30 minutes of low-impact walking or cycling in fresh air.",
                 "Creative Quest: Write, sketch, or design something tangible for 30 minutes.",
                 "Digital Friction: Put parental/screen time lock on gaming apps with a random difficult password.",
                 "Evening Relaxation: Read 15 pages of fiction before sleep without any screens nearby.",
@@ -461,7 +462,7 @@ def _build_deterministic_missions(
             ],
             7: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water to support nervous recovery.",
-                f"Physical Movement: 25 minutes of restorative mobility and stretching.",
+                "Physical Movement: 25 minutes of restorative mobility and stretching.",
                 "Milestone Review: Count how many real-world hours you reclaimed and invested this week.",
                 "Tangible Reward: Celebrate completing 7 days by engaging in a healthy outdoor activity.",
                 "Identity Strengthening: Reaffirm your mastery over your time and digital habits.",
@@ -479,7 +480,7 @@ def _build_deterministic_missions(
             ],
             2: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with a pinch of salt in morning.",
-                f"Physical Movement: 20-minute post-meal walk to prevent blood glucose spikes.",
+                "Physical Movement: 20-minute post-meal walk to prevent blood glucose spikes.",
                 "Trigger Food Replacement: Stock fridge with sliced bell peppers, carrots, and roasted almonds.",
                 "Sugar Urge Pause: When craving sweets, drink 300ml water and wait 10 full minutes.",
                 "Nighttime Kitchen Curfew: Close the kitchen 2 hours prior to sleep; drink warm water.",
@@ -495,7 +496,7 @@ def _build_deterministic_missions(
             ],
             4: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water across the day.",
-                f"Physical Movement: 30 minutes of steady Zone 2 cardiovascular movement.",
+                "Physical Movement: 30 minutes of steady Zone 2 cardiovascular movement.",
                 "Delivery App Purge: Uninstall food delivery apps or turn off all food discount notifications.",
                 "Whole-Food Anchor: Ensure at least 70% of each meal plate consists of raw or steamed vegetables.",
                 "Evening Cravings Substitute: Sip cinnamon herbal tea when after-dinner sweet urges strike.",
@@ -503,7 +504,7 @@ def _build_deterministic_missions(
             ],
             5: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with nutritious meals.",
-                f"Physical Movement: 30 minutes of functional resistance exercise.",
+                "Physical Movement: 30 minutes of functional resistance exercise.",
                 "Grocery Defense: Never shop while hungry; stick strictly to a pre-written whole-food list.",
                 "Mindful Texture Savoring: Eat one meal in complete silence, appreciating the natural flavors.",
                 "Salt & Fat Balance: Use natural spices, herbs, and lemon instead of processed sauces.",
@@ -511,7 +512,7 @@ def _build_deterministic_missions(
             ],
             6: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water throughout the day.",
-                f"Physical Movement: 25 minutes of brisk walking or light jogging.",
+                "Physical Movement: 25 minutes of brisk walking or light jogging.",
                 "Label Scrutiny: Inspect food labels today and reject anything containing high-fructose corn syrup.",
                 "Emotional Dopamine Switch: Replace sugary comfort treats with a hot bath or favorite book.",
                 "Sleep Protection: Go to bed on a light stomach to facilitate deep cellular repair.",
@@ -519,7 +520,7 @@ def _build_deterministic_missions(
             ],
             7: [
                 f"Hydration Protocol: Drink {metrics.hydration_liters}L of water with morning mineral hydration.",
-                f"Physical Movement: 25 minutes of gentle full-body mobility and core stretching.",
+                "Physical Movement: 25 minutes of gentle full-body mobility and core stretching.",
                 "Metabolic Milestone: Celebrate the reduction of afternoon lethargy and sugar brain fog.",
                 "Culinary Victory: Cook a delicious, colorful, whole-food dish to honor your body.",
                 "Long-Term Commitment: Reaffirm your commitment to nourishing your brain with real food.",
@@ -541,8 +542,8 @@ def _build_deterministic_missions(
     why_this_works = (
         f"In {metrics.phase_name} (Day {day}), your mesolimbic dopamine pathways are undergoing "
         f"progressive neuroplastic recalibration. Combining structured caloric intake ({metrics.target_calories} kcal), "
-        f"steady hydration, and deliberate cue-replacement creates new inhibitory neural pathways in the prefrontal cortex, "
-        f"permanently reducing craving intensity."
+        "steady hydration, and deliberate cue-replacement creates new inhibitory neural pathways in the prefrontal cortex, "
+        "permanently reducing craving intensity."
     )
 
     return special_mission, routine_tasks, why_this_works
@@ -655,14 +656,7 @@ def generate_daily_prescription(biometrics: BiometricInput) -> PrescriptionRespo
         return _generate_fallback_prescription(biometrics)
 
     try:
-        http_opts = None
-        if hasattr(types, "HttpOptions") and hasattr(types, "HttpRetryOptions"):
-            try:
-                http_opts = types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))
-            except Exception:
-                http_opts = None
-
-        client = genai.Client(api_key=api_key, http_options=http_opts) if http_opts else genai.Client(api_key=api_key)
+        client = genai.Client(api_key=api_key)
 
         prompt = f"""
 SYSTEM CONTEXT: You are the NIVARAN Clinical Addiction Recovery & Metabolic Engine.
@@ -753,23 +747,20 @@ Output a single valid JSON object strictly matching this schema:
 }}
 """
 
-        # Low-latency configuration for Gemini API
-        thinking_cfg = None
-        if hasattr(types, "ThinkingConfig"):
-            try:
-                thinking_cfg = types.ThinkingConfig(thinking_budget=0)
-            except Exception:
-                thinking_cfg = None
-
+        # Low-latency structured JSON configuration for Gemini API
         gen_config = types.GenerateContentConfig(
             response_mime_type="application/json",
             temperature=0.2,
             max_output_tokens=1200,
-            thinking_config=thinking_cfg,
         )
 
-        # Try candidate models with gemini-2.5-flash prioritizing low latency
-        candidate_models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
+        # Try candidate models prioritizing low latency & quota reliability
+        candidate_models = [
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-2.5-flash",
+        ]
         response = None
         for model_name in candidate_models:
             try:
@@ -873,7 +864,7 @@ Output a single valid JSON object strictly matching this schema:
 
             why_this_works = data.get("why_this_works") or (
                 f"In {metrics.phase_name} (Day {biometrics.day_number}), structured nutrition ({metrics.target_calories} kcal) "
-                f"and low-impact physical movement activate the parasympathetic nervous system, reinforcing prefrontal inhibitory circuits."
+                "and low-impact physical movement activate the parasympathetic nervous system, reinforcing prefrontal inhibitory circuits."
             )
 
             return PrescriptionResponse(

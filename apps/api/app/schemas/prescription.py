@@ -1,4 +1,4 @@
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Any, Union, Dict
 from pydantic import BaseModel, Field
 
 TrackType = Literal["sm", "sa", "gm", "jf"]
@@ -20,7 +20,10 @@ class BiometricInput(BaseModel):
     target_days: int = Field(default=28, ge=7, le=180, description="Dynamic recovery duration (21, 35, 54 days)")
     severity_score: float = Field(default=5.0, ge=1.0, le=10.0, description="Diagnostic severity score 1.0 to 10.0")
     severity_level: Literal["minor", "moderate", "severe"] = Field(default="moderate", description="minor, moderate, or severe")
-    survey_responses: List[dict] = Field(default_factory=list, description="List of question text and score/answer dicts")
+    survey_responses: Union[List[Dict[str, Any]], List[int], List[Any]] = Field(
+        default_factory=list,
+        description="List of question text and score/answer dicts or numbers",
+    )
     medical_flags: List[str] = Field(default_factory=list, description="Medical condition flags")
     medical_notes: str = Field(default="", description="Additional medical or lifestyle notes")
     dietary_preference: str = Field(default="vegetarian", description="vegetarian, non_vegetarian, vegan, eggetarian")

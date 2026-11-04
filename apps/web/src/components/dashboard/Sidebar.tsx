@@ -313,7 +313,7 @@ export function Sidebar({
 
               {/* [📖 About Us & Protocols] Button */}
               <Link
-                href="/explore"
+                href="/explore?from=dashboard"
                 onClick={onClose}
                 className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-[#2D221A] bg-white hover:bg-[#F0ECE7] border border-[#EAE5DE] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-98 text-decoration-none"
               >

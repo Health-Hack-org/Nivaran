@@ -24,7 +24,7 @@ import {
   PrescriptionResponse,
   BiometricInput,
 } from "@/types";
-import { generatePrescription } from "@/lib/api";
+import { generatePrescription, recalculateProfilePrescription } from "@/lib/api";
 import {
   getSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -668,7 +668,7 @@ export default function DashboardPage() {
         try {
           const { data: trkRows } = await supabase
             .from("track_progress")
-            .select("track, current_day, streak, shields, target_days, severity_score, severity_level, survey_responses")
+            .select("id, track, current_day, streak, shields, updated_at")
             .eq("user_id", activeUserId);
 
           if (trkRows && trkRows.length > 0) {
@@ -680,20 +680,36 @@ export default function DashboardPage() {
                   currentDay: row.current_day || 1,
                   streak: row.streak || 0,
                   shields: row.shields ?? 1,
-                  targetDays: row.target_days || 28,
-                  severityScore:
-                    row.severity_score !== null && row.severity_score !== undefined
-                      ? Number(row.severity_score)
-                      : undefined,
-                  severityLevel: row.severity_level || undefined,
-                  surveyResponses: row.survey_responses || undefined,
+                  targetDays: 28,
                 };
               }
             });
 
-            // Ensure active track matches user's active recovery track
             if (trkRows[0]?.track && !loadedProfile.active_track) {
               loadedProfile.active_track = trkRows[0].track as TrackType;
+            }
+          }
+
+          // Fallback: ONLY if track_progress row was not found in Supabase, reconstruct day from completed daily_logs
+          if (!hasSupabaseTracks) {
+            const { data: completedLogs } = await supabase
+              .from("daily_logs")
+              .select("track, day_number, completed_at")
+              .eq("user_id", activeUserId)
+              .not("completed_at", "is", null);
+
+            if (completedLogs && completedLogs.length > 0) {
+              hasSupabaseTracks = true;
+              completedLogs.forEach((log: any) => {
+                const t = log.track as TrackType;
+                const completedDay = Number(log.day_number) || 0;
+                if (t in progressMap) {
+                  if (completedDay >= progressMap[t].currentDay) {
+                    progressMap[t].currentDay = completedDay + 1;
+                    progressMap[t].streak = Math.max(progressMap[t].streak, completedDay);
+                  }
+                }
+              });
             }
           }
         } catch (trkErr) {
@@ -901,7 +917,6 @@ export default function DashboardPage() {
                   track: activeTrack,
                   day_number: activeDayNumber,
                   tasks_completed: completedIds,
-                  completed_at: localDayDone ? new Date().toISOString() : null,
                 },
                 { onConflict: "user_id,track,day_number" }
               )
@@ -1357,11 +1372,16 @@ export default function DashboardPage() {
     try {
       nextPrescription = await generatePrescription(nextPayload, true);
     } catch (genErr) {
-      console.warn("Generate next day prescription fallback:", genErr);
-      nextPrescription = {
-        ...prescription,
-        day_number: nextDay,
-      };
+      console.warn("Generate next day prescription failed, trying fallback:", genErr);
+      try {
+        nextPrescription = await recalculateProfilePrescription(nextPayload);
+      } catch {
+        nextPrescription = {
+          ...prescription,
+          day_number: nextDay,
+          special_mission: `Day ${nextDay} Milestone: Deepen your recovery routine and reinforce behavioral boundaries.`,
+        };
+      }
     }
 
     const updatedTracksProgress: Record<TrackType, DashboardTrackProgress> = {

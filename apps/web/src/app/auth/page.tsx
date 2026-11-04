@@ -55,37 +55,65 @@ function AuthForm() {
             JSON.stringify({ id: data.user.id, email: data.user.email })
           );
 
-          // Check if user has an active profile & track progress
-          let hasActiveProfile = false;
-          let hasTrackProgress = false;
+          // Robust check if user has an active recovery in progress across all persistent indicators
+          let hasRecoveryStarted = false;
 
           try {
+            // 1. Check profile row
             const { data: prof } = await supabase
               .from("profiles")
               .select("*")
               .eq("id", data.user.id)
               .maybeSingle();
 
-            if (prof && prof.height_cm) {
-              hasActiveProfile = true;
+            if (prof) {
               localStorage.setItem("nivaran_profile", JSON.stringify(prof));
+              if (prof.active_track && prof.height_cm) {
+                hasRecoveryStarted = true;
+              }
             }
 
+            // 2. Check track_progress row
             const { data: trk } = await supabase
               .from("track_progress")
-              .select("*")
-              .eq("user_id", data.user.id)
-              .limit(1);
+              .select("id, track, current_day, streak")
+              .eq("user_id", data.user.id);
 
-            if (trk && trk.length > 0) {
-              hasTrackProgress = true;
+            if (trk && trk.length > 0 && trk.some((t: any) => Number(t.current_day) >= 1)) {
+              hasRecoveryStarted = true;
+            }
+
+            // 3. Check daily_logs row (for users who completed days)
+            if (!hasRecoveryStarted) {
+              const { data: logs } = await supabase
+                .from("daily_logs")
+                .select("id, track, day_number")
+                .eq("user_id", data.user.id)
+                .limit(1);
+
+              if (logs && logs.length > 0) {
+                hasRecoveryStarted = true;
+              }
+            }
+
+            // 4. Check daily_prescriptions row
+            if (!hasRecoveryStarted) {
+              const { data: rx } = await supabase
+                .from("daily_prescriptions")
+                .select("id")
+                .eq("user_id", data.user.id)
+                .limit(1);
+
+              if (rx && rx.length > 0) {
+                hasRecoveryStarted = true;
+              }
             }
           } catch (checkErr) {
-            console.warn("Profile or track check error:", checkErr);
+            console.warn("Recovery progress check error:", checkErr);
           }
 
-          // Existing user with active track -> Dashboard; otherwise -> Explore
-          if (hasTrackProgress) {
+          // Existing user with active recovery plan -> Dashboard; otherwise -> Explore
+          if (hasRecoveryStarted) {
             router.push("/dashboard");
           } else {
             router.push("/explore");

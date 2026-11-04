@@ -19,6 +19,7 @@ __all__ = [
     "GenderType",
     "ActivityLevel",
     "BiometricInput",
+    "PrescriptionRequest",
     "ComputedMetrics",
     "DietProtocol",
     "ExerciseRoutineItem",
