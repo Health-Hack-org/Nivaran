@@ -52,7 +52,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       type="button"
       aria-label="Toggle theme"
       title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-      className={`relative w-10 h-10 rounded-xl border flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm select-none bg-[#F0ECE7] border-[#EAE5DE] text-[#8C6A4F] hover:border-[#8C6A4F]/50 dark:bg-[#2B241E] dark:border-white/10 dark:text-[#E2BA91] dark:hover:border-[#E2BA91]/50 ${className}`}
+      className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm select-none bg-[#F0ECE7] border-[#EAE5DE] text-[#8C6A4F] hover:border-[#8C6A4F]/50 dark:bg-[#2B241E] dark:border-white/10 dark:text-[#E2BA91] dark:hover:border-[#E2BA91]/50 ${className}`}
     >
       <Sun className="w-4 h-4 transition-transform duration-300 dark:hidden" />
       <Moon className="w-4 h-4 transition-transform duration-300 hidden dark:block" />

@@ -227,87 +227,48 @@ function AuthForm() {
     };
     localStorage.setItem("nivaran_auth_user", JSON.stringify(guestUser));
 
-    const storedProfile = localStorage.getItem("nivaran_profile");
-    if (storedProfile) {
-      router.push("/dashboard");
-    } else {
-      router.push("/explore");
-    }
+    // Route guest seekers directly to /explore so they can choose their tracks or recovery options
+    router.push("/explore");
   };
 
   return (
-    <div className="auth-wrapper" style={{ backgroundColor: "#F8F7F4", minHeight: "100vh" }}>
+    <div className="auth-wrapper min-h-screen">
       {/* Signature Mandalas */}
       <BackgroundMandalas />
 
       {/* Main Glassmorphic Card */}
-      <div className="glass-card" style={{ maxWidth: "460px", width: "100%", zIndex: 10 }}>
+      <div className="glass-card max-w-[460px] w-full z-10 transition-colors duration-200">
         {/* Brand Header */}
-        <Link href="/" style={{ textDecoration: "none" }} className="inline-block">
-          <div
-            style={{
-              width: "52px",
-              height: "52px",
-              borderRadius: "50%",
-              background: "#66350F",
-              color: "#F5F5DC",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: "bold",
-              fontSize: "20px",
-              margin: "0 auto 12px",
-              boxShadow: "0 4px 14px rgba(102, 53, 15, 0.25)",
-            }}
-          >
+        <Link href="/" className="inline-block no-underline">
+          <div className="w-[52px] h-[52px] rounded-full bg-[#66350F] dark:bg-[#8C6A4F] text-[#F5F5DC] flex items-center justify-center font-bold text-xl mx-auto mb-3 shadow-[0_4px_14px_rgba(102,53,15,0.25)] transition-transform hover:scale-105">
             N
           </div>
         </Link>
 
-        <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#35291F", marginBottom: "4px" }}>
+        <h2 className="text-[22px] font-extrabold text-[#35291F] dark:text-[#FAF6F0] mb-1">
           NIVARAN Sanctuary
         </h2>
-        <p style={{ fontSize: "13px", color: "#66350F", opacity: 0.85, marginBottom: "20px" }}>
+        <p className="text-[13px] text-[#66350F] dark:text-[#D8AA80] opacity-85 mb-5">
           {activeTab === "login"
             ? "Welcome back. Re-enter your healing space."
             : "Begin your personalized 28-day neuro-recovery journey."}
         </p>
 
         {/* Auth Tabs */}
-        <div
-          style={{
-            display: "flex",
-            backgroundColor: "rgba(102, 53, 15, 0.08)",
-            padding: "4px",
-            borderRadius: "14px",
-            marginBottom: "20px",
-          }}
-        >
+        <div className="flex p-1 rounded-2xl mb-5 bg-[#66350F]/8 dark:bg-black/30 border border-transparent dark:border-white/10">
           <button
             type="button"
             onClick={() => {
               setActiveTab("login");
               setErrorMsg("");
             }}
-            style={{
-              flex: 1,
-              padding: "10px 16px",
-              borderRadius: "10px",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: "13px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.2s ease",
-              backgroundColor: activeTab === "login" ? "#FFFFFF" : "transparent",
-              color: activeTab === "login" ? "#66350F" : "#7E6B5D",
-              boxShadow: activeTab === "login" ? "0 2px 8px rgba(0,0,0,0.06)" : "none",
-            }}
+            className={`flex-1 py-2.5 px-4 rounded-xl border-none cursor-pointer font-bold text-[13px] flex items-center justify-center gap-1.5 transition-all duration-200 ${
+              activeTab === "login"
+                ? "bg-white dark:bg-[#332A24] text-[#66350F] dark:text-[#FAF6F0] shadow-sm"
+                : "bg-transparent text-[#7E6B5D] dark:text-[#A8988B] hover:text-[#2D221A] dark:hover:text-[#FAF6F0]"
+            }`}
           >
-            <LogIn style={{ width: "15px", height: "15px" }} />
+            <LogIn className="w-[15px] h-[15px]" />
             <span>Sign In</span>
           </button>
 
@@ -317,219 +278,110 @@ function AuthForm() {
               setActiveTab("signup");
               setErrorMsg("");
             }}
-            style={{
-              flex: 1,
-              padding: "10px 16px",
-              borderRadius: "10px",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: "13px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.2s ease",
-              backgroundColor: activeTab === "signup" ? "#FFFFFF" : "transparent",
-              color: activeTab === "signup" ? "#66350F" : "#7E6B5D",
-              boxShadow: activeTab === "signup" ? "0 2px 8px rgba(0,0,0,0.06)" : "none",
-            }}
+            className={`flex-1 py-2.5 px-4 rounded-xl border-none cursor-pointer font-bold text-[13px] flex items-center justify-center gap-1.5 transition-all duration-200 ${
+              activeTab === "signup"
+                ? "bg-white dark:bg-[#332A24] text-[#66350F] dark:text-[#FAF6F0] shadow-sm"
+                : "bg-transparent text-[#7E6B5D] dark:text-[#A8988B] hover:text-[#2D221A] dark:hover:text-[#FAF6F0]"
+            }`}
           >
-            <UserPlus style={{ width: "15px", height: "15px" }} />
+            <UserPlus className="w-[15px] h-[15px]" />
             <span>Create Account</span>
           </button>
         </div>
 
         {/* Error Alert */}
         {errorMsg && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              backgroundColor: "#fce8e6",
-              color: "#c5221f",
-              padding: "10px 14px",
-              borderRadius: "10px",
-              fontSize: "12px",
-              marginBottom: "16px",
-              textAlign: "left",
-            }}
-          >
-            <AlertCircle style={{ width: "16px", height: "16px", flexShrink: 0 }} />
+          <div className="flex items-center gap-2 p-3 rounded-xl text-xs mb-4 text-left bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/50">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {/* Form */}
-        <form onSubmit={activeTab === "login" ? handleLogin : handleSignup} style={{ textAlign: "left" }}>
+        <form onSubmit={activeTab === "login" ? handleLogin : handleSignup} className="text-left">
           {activeTab === "signup" && (
-            <div style={{ marginBottom: "14px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  color: "#35291F",
-                  marginBottom: "4px",
-                }}
-              >
+            <div className="mb-3.5">
+              <label className="block text-xs font-bold text-[#35291F] dark:text-[#EAE5DE] mb-1">
                 Preferred Name / Seeker Handle
               </label>
-              <div style={{ position: "relative" }}>
+              <div className="relative">
                 <input
                   type="text"
                   placeholder="e.g. Maya"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="auth-input"
-                  style={{ width: "100%", paddingLeft: "36px" }}
+                  className="w-full pl-9 pr-3 py-3 rounded-xl border text-sm transition-all bg-white dark:bg-[#1A1512] border-[#EAE5DE] dark:border-white/15 text-[#2D221A] dark:text-[#FAF6F0] placeholder:text-[#A08A7C] dark:placeholder:text-[#7E6B5D] focus:outline-none focus:ring-2 focus:ring-[#8C6A4F]"
                 />
-                <User
-                  style={{
-                    position: "absolute",
-                    left: "12px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: "15px",
-                    height: "15px",
-                    color: "#A08A7C",
-                  }}
-                />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A08A7C] dark:text-[#8C7B70]" />
               </div>
             </div>
           )}
 
-          <div style={{ marginBottom: "14px" }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: "12px",
-                fontWeight: 700,
-                color: "#35291F",
-                marginBottom: "4px",
-              }}
-            >
+          <div className="mb-3.5">
+            <label className="block text-xs font-bold text-[#35291F] dark:text-[#EAE5DE] mb-1">
               Email Address
             </label>
-            <div style={{ position: "relative" }}>
+            <div className="relative">
               <input
                 type="email"
                 placeholder="seeker@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="auth-input"
-                style={{ width: "100%", paddingLeft: "36px" }}
+                className="w-full pl-9 pr-3 py-3 rounded-xl border text-sm transition-all bg-white dark:bg-[#1A1512] border-[#EAE5DE] dark:border-white/15 text-[#2D221A] dark:text-[#FAF6F0] placeholder:text-[#A08A7C] dark:placeholder:text-[#7E6B5D] focus:outline-none focus:ring-2 focus:ring-[#8C6A4F]"
               />
-              <Mail
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  width: "15px",
-                  height: "15px",
-                  color: "#A08A7C",
-                }}
-              />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A08A7C] dark:text-[#8C7B70]" />
             </div>
           </div>
 
-          <div style={{ marginBottom: "14px" }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: "12px",
-                fontWeight: 700,
-                color: "#35291F",
-                marginBottom: "4px",
-              }}
-            >
+          <div className="mb-3.5">
+            <label className="block text-xs font-bold text-[#35291F] dark:text-[#EAE5DE] mb-1">
               Password
             </label>
-            <div style={{ position: "relative" }}>
+            <div className="relative">
               <input
                 type="password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="auth-input"
-                style={{ width: "100%", paddingLeft: "36px" }}
+                className="w-full pl-9 pr-3 py-3 rounded-xl border text-sm transition-all bg-white dark:bg-[#1A1512] border-[#EAE5DE] dark:border-white/15 text-[#2D221A] dark:text-[#FAF6F0] placeholder:text-[#A08A7C] dark:placeholder:text-[#7E6B5D] focus:outline-none focus:ring-2 focus:ring-[#8C6A4F]"
               />
-              <Lock
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  width: "15px",
-                  height: "15px",
-                  color: "#A08A7C",
-                }}
-              />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A08A7C] dark:text-[#8C7B70]" />
             </div>
           </div>
 
           {activeTab === "signup" && (
-            <div style={{ marginBottom: "16px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  color: "#35291F",
-                  marginBottom: "4px",
-                }}
-              >
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-[#35291F] dark:text-[#EAE5DE] mb-1">
                 Confirm Password
               </label>
-              <div style={{ position: "relative" }}>
+              <div className="relative">
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="auth-input"
-                  style={{ width: "100%", paddingLeft: "36px" }}
+                  className="w-full pl-9 pr-3 py-3 rounded-xl border text-sm transition-all bg-white dark:bg-[#1A1512] border-[#EAE5DE] dark:border-white/15 text-[#2D221A] dark:text-[#FAF6F0] placeholder:text-[#A08A7C] dark:placeholder:text-[#7E6B5D] focus:outline-none focus:ring-2 focus:ring-[#8C6A4F]"
                 />
-                <Lock
-                  style={{
-                    position: "absolute",
-                    left: "12px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: "15px",
-                    height: "15px",
-                    color: "#A08A7C",
-                  }}
-                />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A08A7C] dark:text-[#8C7B70]" />
               </div>
             </div>
           )}
 
           {activeTab === "login" && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "18px",
-                fontSize: "12px",
-              }}
-            >
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", color: "#66350F" }}>
+            <div className="flex justify-between items-center mb-4 text-xs">
+              <label className="flex items-center gap-1.5 cursor-pointer text-[#66350F] dark:text-[#D8AA80]">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  style={{ accentColor: "#66350F" }}
+                  className="accent-[#8C6A4F]"
                 />
                 <span>Remember session</span>
               </label>
-              <span style={{ color: "#A08A7C", fontSize: "11px" }}>Clinical Sanctuary</span>
+              <span className="text-[11px] text-[#A08A7C] dark:text-[#8C7B70]">Clinical Sanctuary</span>
             </div>
           )}
 
@@ -537,96 +389,46 @@ function AuthForm() {
           <button
             type="submit"
             disabled={isLoading}
-            className="btn-auth-submit"
-            style={{
-              width: "100%",
-              padding: "14px",
-              backgroundColor: "#66350F",
-              color: "#FFFFFF",
-              borderRadius: "12px",
-              border: "none",
-              fontWeight: 700,
-              fontSize: "14px",
-              cursor: isLoading ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              boxShadow: "0 4px 12px rgba(102, 53, 15, 0.2)",
-              transition: "all 0.2s ease",
-              opacity: isLoading ? 0.75 : 1,
-            }}
+            className="w-full py-3.5 px-4 bg-[#8C6A4F] hover:bg-[#73543B] dark:bg-[#8C6A4F] dark:hover:bg-[#A37B5C] text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md hover:scale-[1.01] active:scale-98 transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <span>Authenticating...</span>
             ) : activeTab === "login" ? (
               <>
                 <span>Sign In to Dashboard</span>
-                <ArrowRight style={{ width: "16px", height: "16px" }} />
+                <ArrowRight className="w-4 h-4" />
               </>
             ) : (
               <>
                 <span>Create Account & Choose Track</span>
-                <ArrowRight style={{ width: "16px", height: "16px" }} />
+                <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
 
         {/* Divider */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            margin: "20px 0 16px",
-            color: "#A08A7C",
-            fontSize: "11px",
-            textTransform: "uppercase",
-            letterSpacing: "1px",
-          }}
-        >
-          <div style={{ flex: 1, height: "1px", backgroundColor: "rgba(102, 53, 15, 0.15)" }} />
-          <span style={{ padding: "0 10px" }}>or explore first</span>
-          <div style={{ flex: 1, height: "1px", backgroundColor: "rgba(102, 53, 15, 0.15)" }} />
+        <div className="flex items-center my-5 text-[11px] uppercase tracking-wider text-[#A08A7C] dark:text-[#8C7B70]">
+          <div className="flex-1 h-px bg-[#66350F]/15 dark:bg-white/10" />
+          <span className="px-3">or explore first</span>
+          <div className="flex-1 h-px bg-[#66350F]/15 dark:bg-white/10" />
         </div>
 
         {/* Guest Action */}
         <button
           type="button"
           onClick={handleGuestContinue}
-          style={{
-            width: "100%",
-            padding: "11px",
-            backgroundColor: "transparent",
-            color: "#66350F",
-            borderRadius: "12px",
-            border: "1.5px solid rgba(102, 53, 15, 0.25)",
-            fontWeight: 600,
-            fontSize: "13px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px",
-            transition: "all 0.2s ease",
-          }}
+          className="w-full py-3 px-4 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 text-[#66350F] dark:text-[#E2BA91] rounded-xl border border-[#66350F]/25 dark:border-white/20 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
         >
-          <UserCheck style={{ width: "16px", height: "16px" }} />
+          <UserCheck className="w-4 h-4 text-[#8C6A4F] dark:text-[#E2BA91]" />
           <span>Continue as Guest Seeker</span>
         </button>
 
         {/* Bottom Navigation */}
-        <div style={{ marginTop: "18px", fontSize: "12px", color: "#66350F" }}>
+        <div className="mt-4 text-xs">
           <Link
             href="/"
-            style={{
-              color: "#66350F",
-              textDecoration: "none",
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
+            className="text-[#66350F] dark:text-[#D8AA80] hover:underline font-semibold inline-flex items-center gap-1 transition-colors"
           >
             ← Return to Landing Page
           </Link>
@@ -640,8 +442,8 @@ export default function AuthPage() {
   return (
     <Suspense
       fallback={
-        <div className="auth-wrapper flex items-center justify-center">
-          <div className="text-[#66350F] font-semibold text-sm">Loading NIVARAN Sanctuary...</div>
+        <div className="auth-wrapper min-h-screen flex items-center justify-center">
+          <div className="text-[#66350F] dark:text-[#D8AA80] font-semibold text-sm animate-pulse">Loading NIVARAN Sanctuary...</div>
         </div>
       }
     >

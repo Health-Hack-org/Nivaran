@@ -9,8 +9,10 @@ import { ArrowRight } from "lucide-react";
 export default function LandingPage() {
   return (
     <div style={{ position: "relative", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
-      {/* Theme Switcher */}
-      <ThemeToggle className="fixed top-5 right-5 z-50" />
+      {/* Floating Theme Switcher: Perfectly Anchored Top-Right */}
+      <header className="fixed top-5 right-5 sm:top-6 sm:right-6 z-50 flex items-center">
+        <ThemeToggle />
+      </header>
 
       {/* Signature Mandalas */}
       <BackgroundMandalas />
@@ -23,7 +25,7 @@ export default function LandingPage() {
         {/* Action Buttons: Balanced Primary & Secondary CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
           <Link
-            href="/auth"
+            href="/auth?tab=login"
             className="flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-md"
             style={{
               backgroundColor: "#8C6A4F",

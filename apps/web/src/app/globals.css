@@ -316,6 +316,8 @@ body {
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
+  background-color: #F8F7F4;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .glass-card {
@@ -576,7 +578,9 @@ html.dark body {
   color: #FAF6F0 !important;
 }
 
-html.dark div.min-h-screen {
+html.dark div.min-h-screen,
+html.dark .auth-wrapper,
+html.dark div.auth-wrapper {
   background-color: #1A1613 !important;
   color: #FAF6F0 !important;
 }
