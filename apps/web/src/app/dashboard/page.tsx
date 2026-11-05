@@ -11,6 +11,8 @@ import {
   ArrowRight,
   ExternalLink,
   HeartPulse,
+  Lock,
+  X,
 } from "lucide-react";
 
 import { SpringCheck } from "@/components/ui/SpringCheck";
@@ -541,6 +543,10 @@ export default function DashboardPage() {
   const [sidebarDrawerOpen, setSidebarDrawerOpen] = useState<boolean>(false);
   const [isSOSOpen, setIsSOSOpen] = useState<boolean>(false);
 
+  // Guest Seeker & Login Restriction Modal State
+  const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+
   // Active track progress & target days calculation
   const activeTrackProgress = allTracksProgress[currentTrack] || {
     currentDay: 1,
@@ -574,35 +580,49 @@ export default function DashboardPage() {
       const supabase = getSupabaseBrowserClient();
       let activeUserId: string | null = null;
 
-      // 1. Check for active session in Supabase Auth (Strict entry check)
+      // 1. Check for active session in Supabase Auth or local guest seeker session
+      let isGuestUser = false;
       if (supabase && isSupabaseConfigured()) {
         try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             activeUserId = user.id;
-          } else {
-            router.push("/auth");
-            return;
+            isGuestUser = false;
           }
         } catch (authErr) {
           console.warn("Supabase auth query error on dashboard mount:", authErr);
-          router.push("/auth");
-          return;
         }
-      } else {
-        // Local mode fallback
+      }
+
+      // If no active Supabase session, verify local storage (guest seeker or local session)
+      if (!activeUserId) {
         const localUserStr = localStorage.getItem("nivaran_auth_user");
+        const localProfileStr = localStorage.getItem("nivaran_profile");
+
         if (localUserStr) {
           try {
             const localUser = JSON.parse(localUserStr);
             activeUserId = localUser.id || localUser.user_id;
+            isGuestUser = Boolean(localUser.isGuest ?? true);
           } catch {}
         }
+
+        if (!activeUserId && localProfileStr) {
+          try {
+            const localProfile = JSON.parse(localProfileStr);
+            activeUserId = localProfile.id;
+            isGuestUser = true;
+          } catch {}
+        }
+
+        // If neither Supabase user nor local profile exists, redirect to auth
         if (!activeUserId) {
           router.push("/auth");
           return;
         }
       }
+
+      setIsGuest(isGuestUser);
 
       if (!isSubscribed) return;
 
@@ -1285,8 +1305,22 @@ export default function DashboardPage() {
   // ========================================================
   // 3. COMPLETE DAY ACTION: Full Persistence Flow
   // ========================================================
+  const handleDayClick = (dayNum: number) => {
+    // Restriction for Guest User: cannot access Day 2 or higher without logging in
+    if (isGuest && dayNum > 1) {
+      setShowLoginModal(true);
+      return;
+    }
+  };
+
   const handleCompleteDay = async () => {
     if (!allTasksCompleted) return;
+
+    // Restriction for Guest User: cannot advance beyond Day 1 without logging in
+    if (isGuest) {
+      setShowLoginModal(true);
+      return;
+    }
 
     // Trigger calm, subtle golden pulse on the Living Mandala
     setIsMandalaPulsing(true);
@@ -1486,8 +1520,23 @@ export default function DashboardPage() {
     jf: "Junk Food & Sugar Freedom",
   };
 
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-[#F8F7F4] flex items-center justify-center p-6 text-[#2D221A]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#F0ECE7] border border-[#EAE5DE] text-[#8C6A4F] flex items-center justify-center animate-pulse">
+            <Sparkles className="w-6 h-6 text-[#8C6A4F]" />
+          </div>
+          <span className="text-xs font-bold text-[#8C6A4F] tracking-wider uppercase animate-pulse">
+            Loading Sanctuary...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#F8F7F4] text-[#2D221A] font-sans selection:bg-[#8C6A4F]/20 selection:text-[#8C6A4F] relative">
+    <div className="min-h-screen bg-[#F8F7F4] text-[#2D221A] font-sans selection:bg-[#8C6A4F]/20 selection:text-[#8C6A4F] relative" suppressHydrationWarning>
       {/* Soothing Minimal Slide-Out Drawer */}
       <Sidebar
         profile={profile}
@@ -1527,6 +1576,18 @@ export default function DashboardPage() {
             <span className="text-xs sm:text-sm font-medium text-[#6E5D52] bg-[#F0ECE7] px-3 py-1 rounded-full truncate">
               {trackTitles[currentTrack] || "Recovery Track"} · Day {currentDayNumber}
             </span>
+
+            {isGuest && (
+              <button
+                type="button"
+                onClick={() => setShowLoginModal(true)}
+                className="text-[11px] font-bold text-[#8C6A4F] bg-[#F0ECE7] hover:bg-[#EAE5DE] border border-[#EAE5DE] px-2.5 py-1 rounded-full flex items-center gap-1 cursor-pointer transition-colors"
+                title="Guest Mode: Day 1 Active"
+              >
+                <Lock className="w-3 h-3 text-[#8C6A4F]" />
+                <span>Guest</span>
+              </button>
+            )}
           </div>
 
           {/* Right: [☀️/🌙 ThemeToggle] & [🚨 SOS] emergency craving button */}
@@ -1619,6 +1680,48 @@ export default function DashboardPage() {
                   className="h-full rounded-full bg-[#8C6A4F] transition-all duration-300"
                   style={{ width: `${progressPercent}%` }}
                 />
+              </div>
+            </div>
+
+            {/* Day Selector / Timeline */}
+            <div className="pt-2 border-t border-[#EAE5DE]">
+              <div className="flex items-center justify-between text-xs text-[#6E5D52] font-semibold mb-2">
+                <span>Recovery Days</span>
+                {isGuest ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8C6A4F] bg-[#F0ECE7] px-2.5 py-0.5 rounded-full">
+                    <Lock className="w-3 h-3 text-[#8C6A4F]" />
+                    Guest Seeker · Day 1 Active
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-medium text-[#6E5D52]">
+                    Track: {trackTitles[currentTrack] || "Recovery Track"}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                {Array.from({ length: Math.min(targetDays, 14) }, (_, idx) => {
+                  const dayNum = idx + 1;
+                  const isActive = dayNum === currentDayNumber;
+                  const isLocked = isGuest && dayNum > 1;
+
+                  return (
+                    <button
+                      key={dayNum}
+                      type="button"
+                      onClick={() => handleDayClick(dayNum)}
+                      className={`flex-shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        isActive
+                          ? "bg-[#8C6A4F] text-white shadow-xs"
+                          : isLocked
+                          ? "bg-[#F8F7F4] text-[#8C6A4F] border border-[#EAE5DE] hover:border-[#8C6A4F]/60"
+                          : "bg-white text-[#2D221A] border border-[#EAE5DE] hover:bg-[#F0ECE7]"
+                      }`}
+                    >
+                      <span>Day {dayNum}</span>
+                      {isLocked && <Lock className="w-3 h-3 text-[#8C6A4F]" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </section>
@@ -1781,6 +1884,71 @@ export default function DashboardPage() {
           }));
         }}
       />
+
+      {/* ======================================================== */}
+      {/* LOGIN REQUIRED POP-UP MODAL (FOR DAY 2+ ACCESS)           */}
+      {/* ======================================================== */}
+      {showLoginModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setShowLoginModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-[#EAE5DE] shadow-2xl text-center space-y-5 relative animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setShowLoginModal(false)}
+              className="absolute top-4 right-4 text-[#6E5D52] hover:text-[#2D221A] p-1.5 rounded-full hover:bg-[#F0ECE7] transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Lock Icon */}
+            <div className="w-16 h-16 rounded-2xl bg-[#F0ECE7] border border-[#EAE5DE] text-[#8C6A4F] flex items-center justify-center mx-auto shadow-inner">
+              <Lock className="w-8 h-8" />
+            </div>
+
+            {/* Text Message */}
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-[#2D221A]">
+                Login Required
+              </h3>
+              <p className="text-base font-bold text-[#8C6A4F] leading-snug">
+                Aage ke din access karne ke liye pehle login karein
+              </p>
+              <p className="text-xs text-[#6E5D52] leading-relaxed">
+                Apna recovery progress save karne aur agle dino ke clinical protocols ko access karne ke liye login ya signup karein.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLoginModal(false);
+                  router.push("/auth?tab=login");
+                }}
+                className="w-full py-3.5 px-6 rounded-xl font-bold text-sm text-white bg-[#8C6A4F] hover:bg-[#73543B] transition-all shadow-md active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>OK</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowLoginModal(false)}
+                className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs text-[#6E5D52] hover:text-[#2D221A] hover:bg-[#F0ECE7] transition-colors cursor-pointer"
+              >
+                Stay on Day 1
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

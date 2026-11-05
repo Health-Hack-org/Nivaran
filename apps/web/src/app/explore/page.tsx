@@ -233,10 +233,17 @@ function ExploreContent() {
 
   // Open modal with track
   const handleOpenModal = (trackId?: TrackType) => {
-    // If not authenticated, route to /auth signup first
+    // If not authenticated, initialize guest seeker session seamlessly
     if (!currentUser) {
-      router.push(`/auth?tab=signup${trackId ? `&track=${trackId}` : ""}`);
-      return;
+      const guestUser = {
+        id: "guest-user-" + Date.now(),
+        email: "guest@nivaran.app",
+        isGuest: true,
+      };
+      setCurrentUser(guestUser);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("nivaran_auth_user", JSON.stringify(guestUser));
+      }
     }
     if (trackId) setSelectedTrack(trackId);
     setAuthError("");
@@ -454,6 +461,16 @@ function ExploreContent() {
         })
       );
 
+      // Ensure guest user marker is preserved in local storage
+      if (!activeUser && typeof window !== "undefined") {
+        const guestUser = {
+          id: userId,
+          email: "guest@nivaran.app",
+          isGuest: true,
+        };
+        localStorage.setItem("nivaran_auth_user", JSON.stringify(guestUser));
+      }
+
       // Ensure all_tracks_progress has user's selected track with target_days immediately
       try {
         let currentAllProgress: Record<string, any> = {
@@ -601,7 +618,7 @@ function ExploreContent() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8F7F4] text-[#2D221A] font-sans selection:bg-[#8C6A4F]/20 selection:text-[#8C6A4F] pt-20 sm:pt-24 pb-16 relative isolate overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8F7F4] text-[#2D221A] font-sans selection:bg-[#8C6A4F]/20 selection:text-[#8C6A4F] pt-20 sm:pt-24 pb-16 relative isolate overflow-x-hidden" suppressHydrationWarning>
       {/* Background Ambient Mandala (Locked in background layer, zero overlap with cards or text) */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
         <svg

@@ -234,15 +234,15 @@ export function Sidebar({
             /* ======================================================== */
             <div className="space-y-4">
               {/* User Name & Avatar */}
-              <div className="bg-white rounded-2xl p-4 border border-[#EAE5DE] shadow-xs flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#F0ECE7] text-[#8C6A4F] font-bold text-sm flex items-center justify-center border border-[#EAE5DE] flex-shrink-0">
+              <div className="bg-white rounded-2xl p-4 border border-[#EAE5DE] shadow-xs flex items-center gap-3" suppressHydrationWarning>
+                <div className="w-10 h-10 rounded-xl bg-[#F0ECE7] text-[#8C6A4F] font-bold text-sm flex items-center justify-center border border-[#EAE5DE] flex-shrink-0" suppressHydrationWarning>
                   {profile.username ? profile.username.charAt(0).toUpperCase() : "S"}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-[#2D221A] truncate">
+                <div className="min-w-0 flex-1" suppressHydrationWarning>
+                  <div className="text-sm font-bold text-[#2D221A] truncate" suppressHydrationWarning>
                     {profile.username || "Seeker"}
                   </div>
-                  <div className="text-xs text-[#6E5D52]">
+                  <div className="text-xs text-[#6E5D52]" suppressHydrationWarning>
                     {profile.age}y · {profile.gender}
                   </div>
                 </div>
@@ -282,23 +282,23 @@ export function Sidebar({
               </div>
 
               {/* Overall Track Progress */}
-              <div className="bg-white rounded-2xl p-4 border border-[#EAE5DE] shadow-xs space-y-2.5">
-                <div className="flex items-center justify-between text-xs font-bold text-[#2D221A]">
+              <div className="bg-white rounded-2xl p-4 border border-[#EAE5DE] shadow-xs space-y-2.5" suppressHydrationWarning>
+                <div className="flex items-center justify-between text-xs font-bold text-[#2D221A]" suppressHydrationWarning>
                   <span>Track Progress</span>
-                  <span className="text-[#8C6A4F]">Day {activeProg.currentDay} / {targetDays}</span>
+                  <span className="text-[#8C6A4F]" suppressHydrationWarning>Day {activeProg.currentDay} / {targetDays}</span>
                 </div>
                 
                 {/* Progress bar */}
-                <div className="w-full h-2 rounded-full bg-[#F0ECE7] overflow-hidden">
+                <div className="w-full h-2 rounded-full bg-[#F0ECE7] overflow-hidden" suppressHydrationWarning>
                   <div
                     className="h-full rounded-full bg-[#8C6A4F] transition-all duration-300"
                     style={{ width: `${percentComplete}%` }}
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-[#6E5D52] pt-1">
-                  <span>🔥 {activeProg.streak} Day Streak</span>
-                  <span>{percentComplete}% Complete</span>
+                <div className="flex items-center justify-between text-[11px] text-[#6E5D52] pt-1" suppressHydrationWarning>
+                  <span suppressHydrationWarning>🔥 {activeProg.streak} Day Streak</span>
+                  <span suppressHydrationWarning>{percentComplete}% Complete</span>
                 </div>
               </div>
 
