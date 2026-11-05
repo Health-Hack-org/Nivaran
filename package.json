@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "npm run dev --prefix apps/web",
     "dev:web": "npm run dev --prefix apps/web",
+    "dev:clean": "npm run dev:clean --prefix apps/web",
+    "clean": "npm run clean --prefix apps/web",
     "build": "npm run build --prefix apps/web",
     "start": "npm run start --prefix apps/web",
     "lint": "npm run lint --prefix apps/web"

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from app.core.config import settings
 from app.api.v1.router import api_router
 
@@ -18,6 +19,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Root Endpoint: Redirect to Swagger Docs
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/docs")
 
 # Health Check Endpoint
 @app.get("/health", tags=["Health"])
